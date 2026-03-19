@@ -451,8 +451,7 @@ class DownloadHandler(FileSystemEventHandler):
 
 
 # ─────────────────────────────────────────────
-# Tray Icon
-# ─────────────────────────────────────────────
+Tra
 
 def create_tray_icon(org: Organizer, observer: Observer, logger: logging.Logger):
     """Crea e avvia l'icona nella system tray."""
@@ -555,10 +554,11 @@ def main():
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
     logger.info(f"Watcher attivo | Hotkey: {hotkey} | Ctrl+C per fermare")
 
-    # Avvia tray icon (blocca il thread principale)
-    tray = create_tray_icon(org, observer, logger)
     try:
-        tray.run()  # bloccante fino a "Esci"
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Chiusura...")
     finally:
         observer.stop()
         observer.join()

@@ -451,71 +451,6 @@ class DownloadHandler(FileSystemEventHandler):
 
 
 # ─────────────────────────────────────────────
-# Tray Icon
-# ─────────────────────────────────────────────
-
-def create_tray_icon(org: Organizer, observer: Observer, logger: logging.Logger):
-    """Crea e avvia l'icona nella system tray."""
-
-    def make_icon_image(color: str = "#4fc3f7") -> Image.Image:
-        img  = Image.new("RGB", (64, 64), color="#1a1a1a")
-        draw = ImageDraw.Draw(img)
-        # Disegna una cartella stilizzata
-        draw.rectangle([8, 20, 56, 52], fill=color)
-        draw.rectangle([8, 14, 30, 22], fill=color)
-        return img
-
-    # Stato watcher
-    state = {"running": True}
-
-    def on_scan(icon, item):
-        logger.info("── Scansione da tray ──")
-        Thread(target=org.scan_all, daemon=True).start()
-
-    def on_toggle(icon, item):
-        if state["running"]:
-            observer.stop()
-            state["running"] = False
-            icon.icon = make_icon_image("#ef5350")  # rosso = fermato
-            logger.info("Watcher fermato da tray")
-        else:
-            observer.start()
-            state["running"] = True
-            icon.icon = make_icon_image("#4fc3f7")  # blu = attivo
-            logger.info("Watcher riavviato da tray")
-
-    def on_open_log(icon, item):
-        log_path = Path(__file__).parent / "organizer.log"
-        os.startfile(str(log_path))
-
-    def on_exit(icon, item):
-        logger.info("Chiusura da tray...")
-        observer.stop()
-        icon.stop()
-
-    def get_toggle_label():
-        return "⏹ Ferma watcher" if state["running"] else "▶ Avvia watcher"
-
-    menu = pystray.Menu(
-        pystray.MenuItem("📁 Download Organizer", None, enabled=False),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("🔍 Scansione manuale", on_scan),
-        pystray.MenuItem(get_toggle_label, on_toggle),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("📄 Apri log", on_open_log),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("❌ Esci", on_exit),
-    )
-
-    icon = pystray.Icon(
-        name="download_organizer",
-        icon=make_icon_image(),
-        title="Download Organizer",
-        menu=menu
-    )
-    return icon
-
-# ─────────────────────────────────────────────
 # MAIN
 # ─────────────────────────────────────────────
 
@@ -555,10 +490,11 @@ def main():
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
     logger.info(f"Watcher attivo | Hotkey: {hotkey} | Ctrl+C per fermare")
 
-    # Avvia tray icon (blocca il thread principale)
-    tray = create_tray_icon(org, observer, logger)
     try:
-        tray.run()  # bloccante fino a "Esci"
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Chiusura...")
     finally:
         observer.stop()
         observer.join()

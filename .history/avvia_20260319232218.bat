@@ -22,5 +22,5 @@ echo  Avvio organizer...
 echo  Premi Ctrl+C per fermare, Ctrl+Shift+O per scansione manuale
 echo.
 
-start /b pythonw -W ignore "%~dp0organizer.py"
+python -W ignore "%~dp0organizer.py"
 pause
