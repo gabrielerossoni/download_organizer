@@ -91,3 +91,69 @@
 2026-03-20 00:05:09 [INFO] ── Analisi: appunti_packet_tracer.avif
 2026-03-20 00:05:21 [DEBUG]    AI → scuola / sistemi (conf=1.00) — Nome del file suggerisce un argomento di rete e protocolli
 2026-03-20 00:05:21 [INFO] ✓ appunti_packet_tracer.avif → Sistemi_Reti/ [scuola/sistemi]
+2026-03-20 00:38:57 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:38:57 [INFO] Modello : llama3.1:8b
+2026-03-20 00:38:57 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:38:57 [INFO] Ollama: connesso ✓
+2026-03-20 00:38:57 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:38:57 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:38:57 [INFO] ═══ Fermato ═══
+2026-03-20 00:40:57 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:40:57 [INFO] Modello : llama3.1:8b
+2026-03-20 00:40:57 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:40:57 [INFO] Ollama: connesso ✓
+2026-03-20 00:40:57 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:40:57 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:40:57 [INFO] ═══ Fermato ═══
+2026-03-20 00:41:27 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:41:27 [INFO] Modello : llama3.1:8b
+2026-03-20 00:41:27 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:41:27 [INFO] Ollama: connesso ✓
+2026-03-20 00:41:27 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:41:27 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:41:27 [INFO] ═══ Fermato ═══
+2026-03-20 00:41:37 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:41:37 [INFO] Modello : llama3.1:8b
+2026-03-20 00:41:37 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:41:37 [INFO] Ollama: connesso ✓
+2026-03-20 00:41:37 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:41:37 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:41:37 [INFO] ═══ Fermato ═══
+2026-03-20 00:42:34 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:42:34 [INFO] Modello : llama3.1:8b
+2026-03-20 00:42:34 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:42:34 [INFO] Ollama: connesso ✓
+2026-03-20 00:42:34 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:42:34 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:42:51 [INFO] ── Analisi: sistemi.jpg
+2026-03-20 00:42:51 [INFO]    Match diretto: 'Sistemi'
+2026-03-20 00:42:51 [INFO] ✓ sistemi.jpg → Sistemi_Reti/ [diretto/Sistemi]
+2026-03-20 00:43:19 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:43:19 [INFO] Modello : llama3.1:8b
+2026-03-20 00:43:19 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:43:19 [INFO] Ollama: connesso ✓
+2026-03-20 00:43:19 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:43:19 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:43:43 [INFO] ── Analisi: sistemi.jpg
+2026-03-20 00:43:43 [INFO]    Match diretto: 'Sistemi'
+2026-03-20 00:43:43 [INFO] ✓ sistemi.jpg → Sistemi_Reti/ [diretto/Sistemi]
+2026-03-20 00:46:05 [INFO] Watcher fermato da tray
+2026-03-20 00:46:21 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:46:21 [INFO] Modello : llama3.1:8b
+2026-03-20 00:46:21 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:46:21 [INFO] Ollama: connesso ✓
+2026-03-20 00:46:21 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:46:21 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:46:31 [INFO] Chiusura da tray...
+2026-03-20 00:46:31 [INFO] ═══ Fermato ═══
+2026-03-20 00:46:37 [INFO] Watcher fermato da tray
+2026-03-20 00:49:03 [INFO] ═══ Download Organizer v3 (Ollama/Qwen2.5) ═══
+2026-03-20 00:49:03 [INFO] Modello : llama3.1:8b
+2026-03-20 00:49:03 [INFO] Cartella: C:\Users\gab\Downloads
+2026-03-20 00:49:03 [INFO] Ollama: connesso ✓
+2026-03-20 00:49:03 [INFO] Memoria attiva su: C:\Users\gab\Downloads\File_Sconosciuti
+2026-03-20 00:49:03 [INFO] Watcher attivo | Hotkey: ctrl+shift+o | Ctrl+C per fermare
+2026-03-20 00:49:09 [INFO] ── Scansione manuale ──
+2026-03-20 00:49:09 [INFO]    6 file trovati
+2026-03-20 00:49:14 [INFO] Chiusura da tray...
+2026-03-20 00:49:14 [INFO] ═══ Fermato ═══

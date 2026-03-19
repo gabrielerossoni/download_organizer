@@ -37,8 +37,7 @@ except ImportError:
 
 CONFIG_PATH  = Path(__file__).parent / "config.json"
 MEMORIA_PATH = Path(__file__).parent / "memoria.json"
-OLLAMA_URL   = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:7b"
+OLLAMA_MODEL = "llama3.1:8b"
 
 
 # ─────────────────────────────────────────────
@@ -454,66 +453,67 @@ class DownloadHandler(FileSystemEventHandler):
 # Tray Icon
 # ─────────────────────────────────────────────
 
-def create_tray_icon(org: Organizer, observer: Observer, logger: logging.Logger):
-    """Crea e avvia l'icona nella system tray."""
+def create_tray_icon(org, observer, logger, tray_state):
 
-    def make_icon_image(color: str = "#4fc3f7") -> Image.Image:
-        img  = Image.new("RGB", (64, 64), color="#1a1a1a")
+    def make_icon_image(active: bool = True) -> Image.Image:
+        img  = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        # Disegna una cartella stilizzata
-        draw.rectangle([8, 20, 56, 52], fill=color)
-        draw.rectangle([8, 14, 30, 22], fill=color)
+        color = (255, 255, 255, 255) if active else (120, 120, 120, 255)
+        # Cartella: base
+        draw.rectangle([6, 22, 58, 54], fill=color)
+        # Linguetta
+        draw.rectangle([6, 14, 26, 23], fill=color)
         return img
 
-    # Stato watcher
-    state = {"running": True}
+    state = {"running": True, "handler": DownloadHandler(org), "dl_dir": str(org.dl_dir)}
 
     def on_scan(icon, item):
-        logger.info("── Scansione da tray ──")
         Thread(target=org.scan_all, daemon=True).start()
 
     def on_toggle(icon, item):
         if state["running"]:
             observer.stop()
+            observer.join()
             state["running"] = False
-            icon.icon = make_icon_image("#ef5350")  # rosso = fermato
+            icon.icon = make_icon_image(active=False)
+            icon.title = "Download Organizer — fermo"
             logger.info("Watcher fermato da tray")
         else:
-            observer.start()
+            new_obs = Observer()
+            new_obs.schedule(state["handler"], state["dl_dir"], recursive=False)
+            new_obs.start()
+            state["new_obs"] = new_obs
+            tray_state["new_obs"] = new_obs
             state["running"] = True
-            icon.icon = make_icon_image("#4fc3f7")  # blu = attivo
+            icon.icon = make_icon_image(active=True)
+            icon.title = "Download Organizer — attivo"
             logger.info("Watcher riavviato da tray")
 
     def on_open_log(icon, item):
-        log_path = Path(__file__).parent / "organizer.log"
-        os.startfile(str(log_path))
+        os.startfile(str(Path(__file__).parent / "organizer.log"))
 
     def on_exit(icon, item):
         logger.info("Chiusura da tray...")
-        observer.stop()
         icon.stop()
 
-    def get_toggle_label():
-        return "⏹ Ferma watcher" if state["running"] else "▶ Avvia watcher"
+    def get_toggle_label(item=None):
+        return "Ferma watcher" if state["running"] else "Avvia watcher"
 
     menu = pystray.Menu(
-        pystray.MenuItem("📁 Download Organizer", None, enabled=False),
+        pystray.MenuItem("Scansione manuale", on_scan, default=True),
+        pystray.MenuItem(get_toggle_label,    on_toggle),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("🔍 Scansione manuale", on_scan),
-        pystray.MenuItem(get_toggle_label, on_toggle),
+        pystray.MenuItem("Apri log",          on_open_log),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("📄 Apri log", on_open_log),
-        pystray.Menu.SEPARATOR,
-        pystray.MenuItem("❌ Esci", on_exit),
+        pystray.MenuItem("Esci",              on_exit),
     )
 
-    icon = pystray.Icon(
+    return pystray.Icon(
         name="download_organizer",
         icon=make_icon_image(),
-        title="Download Organizer",
+        title="Download Organizer — attivo",
         menu=menu
     )
-    return icon
 
 # ─────────────────────────────────────────────
 # MAIN
@@ -524,7 +524,7 @@ def main():
     log_p  = Path(__file__).parent / cfg.get("log_file", "organizer.log")
     logger = setup_logger(str(log_p))
 
-    logger.info("═══ Download Organizer v3 (Ollama/Qwen2.5) ═══")
+    logger.info("═══ Download Organizer v3 (Ollama) ═══")
     logger.info(f"Modello : {cfg.get('ollama_model', OLLAMA_MODEL)}")
     logger.info(f"Cartella: {cfg['download_folder']}")
 
@@ -541,7 +541,7 @@ def main():
     observer.start()
     
     # Watcher su File_Sconosciuti per imparare dagli spostamenti manuali
-    unsure_watcher  = UnsureWatcher(Memoria(logger), logger)
+    unsure_watcher = UnsureWatcher(org.memoria, logger)
     observer2       = Observer()
     observer2.schedule(unsure_watcher, str(org.unsure_dir), recursive=False)
     try:
@@ -556,12 +556,15 @@ def main():
     logger.info(f"Watcher attivo | Hotkey: {hotkey} | Ctrl+C per fermare")
 
     # Avvia tray icon (blocca il thread principale)
-    tray = create_tray_icon(org, observer, logger)
+    tray_state = {}
+    tray = create_tray_icon(org, observer, logger, tray_state)
+
     try:
         tray.run()  # bloccante fino a "Esci"
     finally:
-        observer.stop()
-        observer.join()
+        active_obs = tray_state.get("new_obs", observer)
+        active_obs.stop()
+        active_obs.join()
         try:
             observer2.stop()
             observer2.join()
