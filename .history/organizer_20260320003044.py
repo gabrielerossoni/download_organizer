@@ -496,11 +496,6 @@ def main():
     finally:
         observer.stop()
         observer.join()
-        try:
-            observer2.stop()
-            observer2.join()
-        except Exception:
-            pass
         logger.info("═══ Fermato ═══")
 
 

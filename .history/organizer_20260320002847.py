@@ -265,7 +265,6 @@ class Organizer:
         self.dl_dir     = Path(cfg["download_folder"])
         self.unsure_dir = Path(cfg.get("unsure_folder_path", str(self.dl_dir / "Da_Smistare")))
         self.ai         = AIClassifier(cfg, logger)
-        self.memoria = Memoria(logger)
 
         # Mappa nome_materia (lowercase) → Path
         self.subject_map: dict[str, Path] = {
@@ -362,16 +361,6 @@ class Organizer:
         ext = path.suffix.lower()
         self.log.info(f"── Analisi: {path.name}")
         name_lower = path.stem.lower()
-        
-        # LIVELLO 0 — memoria (spostamenti manuali precedenti)
-        learned_dest = self.memoria.match(path.name)
-        if learned_dest:
-            dest = Path(learned_dest)
-            if dest.exists():
-                self.log.info(f"   Memoria: match → {dest.name}")
-                if self._move(path, dest, "[memoria]"):
-                    self._notify(f"🧠 {path.name}", f"Da memoria → {dest.name}")
-                return
 
         # LIVELLO 1 — nome contiene esattamente il nome di una materia
         for subject in self.cfg.get("school_subjects", []):
@@ -472,17 +461,6 @@ def main():
     observer = Observer()
     observer.schedule(handler, str(org.dl_dir), recursive=False)
     observer.start()
-    
-    # Watcher su File_Sconosciuti per imparare dagli spostamenti manuali
-    unsure_watcher  = UnsureWatcher(Memoria(logger), logger)
-    observer2       = Observer()
-    observer2.schedule(unsure_watcher, str(org.unsure_dir), recursive=False)
-    try:
-        org.unsure_dir.mkdir(parents=True, exist_ok=True)
-        observer2.start()
-        logger.info(f"Memoria attiva su: {org.unsure_dir}")
-    except Exception as e:
-        logger.warning(f"Memoria non attiva: {e}")
 
     hotkey = cfg.get("hotkey", "ctrl+shift+o")
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
@@ -496,11 +474,6 @@ def main():
     finally:
         observer.stop()
         observer.join()
-        try:
-            observer2.stop()
-            observer2.join()
-        except Exception:
-            pass
         logger.info("═══ Fermato ═══")
 
 

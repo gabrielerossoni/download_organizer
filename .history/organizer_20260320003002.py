@@ -472,17 +472,6 @@ def main():
     observer = Observer()
     observer.schedule(handler, str(org.dl_dir), recursive=False)
     observer.start()
-    
-    # Watcher su File_Sconosciuti per imparare dagli spostamenti manuali
-    unsure_watcher  = UnsureWatcher(Memoria(logger), logger)
-    observer2       = Observer()
-    observer2.schedule(unsure_watcher, str(org.unsure_dir), recursive=False)
-    try:
-        org.unsure_dir.mkdir(parents=True, exist_ok=True)
-        observer2.start()
-        logger.info(f"Memoria attiva su: {org.unsure_dir}")
-    except Exception as e:
-        logger.warning(f"Memoria non attiva: {e}")
 
     hotkey = cfg.get("hotkey", "ctrl+shift+o")
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
@@ -496,11 +485,6 @@ def main():
     finally:
         observer.stop()
         observer.join()
-        try:
-            observer2.stop()
-            observer2.join()
-        except Exception:
-            pass
         logger.info("═══ Fermato ═══")
 
 

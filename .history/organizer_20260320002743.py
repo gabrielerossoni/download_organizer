@@ -174,84 +174,8 @@ Rispondi SOLO con questo JSON:
             self.log.warning(f"Errore AI su '{filename}': {e}")
             return {**UNSURE, "reason": str(e)}
 
-# ─────────────────────────────────────────────
-# MEMORIA
-# ─────────────────────────────────────────────
-class Memoria:
-    def __init__(self, logger: logging.Logger):
-        self.log  = logger
-        self.path = MEMORIA_PATH
-        self.rules: list[dict] = self._load()
 
-    def _load(self) -> list:
-        try:
-            if self.path.exists():
-                with open(self.path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return []
 
-    def _save(self):
-        try:
-            with open(self.path, "w", encoding="utf-8") as f:
-                json.dump(self.rules, f, indent=2, ensure_ascii=False)
-        except Exception as e:
-            self.log.warning(f"Memoria: errore salvataggio: {e}")
-
-    def learn(self, filename: str, dest_path: str):
-        """Salva una regola imparata da uno spostamento manuale."""
-        stem = Path(filename).stem.lower()
-        # Estrai parole significative (>3 caratteri)
-        words = [w for w in stem.replace("_", " ").replace("-", " ").split() if len(w) > 3]
-        if not words:
-            return
-        # Controlla se esiste già una regola simile
-        for rule in self.rules:
-            if rule["dest"] == dest_path and any(w in rule["keywords"] for w in words):
-                # Aggiorna keywords e hits
-                rule["keywords"] = list(set(rule["keywords"] + words))
-                rule["hits"] = rule.get("hits", 0) + 1
-                self._save()
-                self.log.info(f"Memoria: regola aggiornata per '{dest_path}' (hits={rule['hits']})")
-                return
-        # Nuova regola
-        rule = {"keywords": words, "dest": dest_path, "hits": 1, "example": filename}
-        self.rules.append(rule)
-        self._save()
-        self.log.info(f"Memoria: nuova regola da '{filename}' → '{Path(dest_path).name}' (keywords: {words})")
-
-    def match(self, filename: str) -> str | None:
-        """Controlla se il file matcha una regola. Ritorna il path destinazione o None."""
-        stem = Path(filename).stem.lower()
-        best_rule  = None
-        best_score = 0
-        for rule in self.rules:
-            score = sum(1 for kw in rule["keywords"] if kw in stem)
-            if score > best_score:
-                best_score = score
-                best_rule  = rule
-        if best_rule and best_score >= 1:
-            return best_rule["dest"]
-        return None
-    
-# ─────────────────────────────────────────────
-# MONITORAGGIO
-# ─────────────────────────────────────────────
-class UnsureWatcher(FileSystemEventHandler):
-    """Monitora File_Sconosciuti — impara quando l'utente sposta un file a mano."""
-    def __init__(self, memoria: Memoria, logger: logging.Logger):
-        self.memoria = memoria
-        self.log     = logger
-
-    def on_moved(self, event):
-        if not event.is_directory:
-            src  = Path(event.src_path)
-            dest = Path(event.dest_path)
-            # Il file è stato spostato fuori da File_Sconosciuti verso una cartella reale
-            if dest.parent != src.parent:
-                self.log.info(f"Memoria: spostamento manuale rilevato: {src.name} → {dest.parent}")
-                self.memoria.learn(src.name, str(dest.parent))    
 
 # ─────────────────────────────────────────────
 # CORE ORGANIZER
@@ -265,7 +189,6 @@ class Organizer:
         self.dl_dir     = Path(cfg["download_folder"])
         self.unsure_dir = Path(cfg.get("unsure_folder_path", str(self.dl_dir / "Da_Smistare")))
         self.ai         = AIClassifier(cfg, logger)
-        self.memoria = Memoria(logger)
 
         # Mappa nome_materia (lowercase) → Path
         self.subject_map: dict[str, Path] = {
@@ -362,16 +285,6 @@ class Organizer:
         ext = path.suffix.lower()
         self.log.info(f"── Analisi: {path.name}")
         name_lower = path.stem.lower()
-        
-        # LIVELLO 0 — memoria (spostamenti manuali precedenti)
-        learned_dest = self.memoria.match(path.name)
-        if learned_dest:
-            dest = Path(learned_dest)
-            if dest.exists():
-                self.log.info(f"   Memoria: match → {dest.name}")
-                if self._move(path, dest, "[memoria]"):
-                    self._notify(f"🧠 {path.name}", f"Da memoria → {dest.name}")
-                return
 
         # LIVELLO 1 — nome contiene esattamente il nome di una materia
         for subject in self.cfg.get("school_subjects", []):
@@ -472,17 +385,6 @@ def main():
     observer = Observer()
     observer.schedule(handler, str(org.dl_dir), recursive=False)
     observer.start()
-    
-    # Watcher su File_Sconosciuti per imparare dagli spostamenti manuali
-    unsure_watcher  = UnsureWatcher(Memoria(logger), logger)
-    observer2       = Observer()
-    observer2.schedule(unsure_watcher, str(org.unsure_dir), recursive=False)
-    try:
-        org.unsure_dir.mkdir(parents=True, exist_ok=True)
-        observer2.start()
-        logger.info(f"Memoria attiva su: {org.unsure_dir}")
-    except Exception as e:
-        logger.warning(f"Memoria non attiva: {e}")
 
     hotkey = cfg.get("hotkey", "ctrl+shift+o")
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
@@ -496,11 +398,6 @@ def main():
     finally:
         observer.stop()
         observer.join()
-        try:
-            observer2.stop()
-            observer2.join()
-        except Exception:
-            pass
         logger.info("═══ Fermato ═══")
 
 
