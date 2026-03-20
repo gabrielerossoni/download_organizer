@@ -1,180 +1,110 @@
-# 📁 Download Organizer
+# 📁 Download Organizer: AI-Powered File Management
 
-Organizza automaticamente la cartella Download in background usando AI locale (Ollama).
-**Safe-first**: se non è sicuro dove mettere un file, va in `Unsorted/` — non cancella mai nulla.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Ollama](https://img.shields.io/badge/AI-Ollama-cyan.svg)](https://ollama.com)
+[![Privacy First](https://img.shields.io/badge/Privacy-Local%20AI-green.svg)](#)
 
----
-
-## 🚀 Installazione
-
-### Requisiti
-
-- **Python 3.10+** — [python.org](https://python.org)
-- **Ollama** — [ollama.com](https://ollama.com)
-- Un modello Ollama installato (consigliato: `llama3.1:8b`)
-
-```bash
-ollama pull llama3.1:8b
-```
-
-### Setup
-
-1. Fai doppio click su **`Setup_DownloadOrganizer.exe`**
-2. Compila le cartelle per ogni materia e categoria
-3. Clicca **Salva e installa**
-4. Il setup installa le dipendenze, crea il config e aggiunge lo script all'avvio automatico
+Automatic background download organizer powered by **Local AI (Ollama)**. 
+Stop wasting time sorting your files—let your computer learn from you!
 
 ---
 
-## 📂 Struttura progetto
+## 🌟 Why Download Organizer?
 
-```
+Most file organizers rely on boring, rigid rules. **Download Organizer** is different:
+
+- **🧠 Brainy**: Uses LLMs (like Llama 3.1) to understand what's inside your files.
+- **⚡ Proactive**: Learns from your manual moves. If you move a file once, it remembers the next time.
+- **🔒 Private**: 100% local. No data ever leaves your computer.
+- **🛡️ Safe-first**: If it's not 100% sure, it moves files to `Unsorted/`. It never deletes anything.
+
+---
+
+## 🚀 Getting Started
+
+### 1. Requirements
+
+- **Python 3.10+**
+- **Ollama** installed and running.
+- Pull your favorite model:
+
+  ```bash
+  ollama pull llama3.1:8b
+  ```
+
+### 2. Quick Setup
+
+1. Double-click **`Setup.bat`** in the root folder.
+2. Follow the guided wizard to set your Download folder and destination categories (School, Work, Personal, etc.).
+3. The setup automatically installs dependencies and adds the app to your Windows Startup.
+
+---
+
+## 📂 Project Structure
+
+```text
 Download Organizer/
-├── Setup.bat                     ← esegui questo per installare
-├── organizer.py                  ← script principale
+├── Setup.bat                ← Run this to install/configure
+├── organizer.py             ← Main application logic
 ├── requirements.txt
 ├── README.md
 │
-├── config/
-│   ├── config.json               ← generato dal setup
-│   └── setup_wizard.py           ← wizard CLI alternativo
-│
-├── memory/
-│   └── history.json              ← regole apprese automaticamente
-│
-├── scripts/
-│   ├── vbs/
-│   │   ├── start.vbs              ← avvio silenzioso (usato da startup)
-│   │   └── stop.vbs               ← ferma l'organizer
-│   └── bat/
-│       ├── start.bat              ← avvio con terminale (per debug)
-│       └── add_to_startup.bat     ← aggiunge manualmente ad avvio automatico
+├── config/                  ← Configuration & CLI Wizard
+├── memory/                  ← Local memory of your moving habits
+└── scripts/                 ← Windows automation scripts (Bat/VBS)
 ```
 
 ---
 
-## ⚙️ Configurazione — `config/config.json`
+## 🧠 Smart Classification
 
-| Chiave | Descrizione |
-|---|---|
-| `download_folder` | Cartella da monitorare |
-| `unsure_folder_path` | Percorso assoluto per file non classificati |
-| `ollama_model` | Modello Ollama da usare |
-| `hotkey` | Tasto per scansione manuale |
-| `wait_seconds` | Secondi di attesa prima di spostare |
-| `dry_run` | `true` = simula senza spostare |
-| `school_subjects` | Materie con cartella destinazione |
-| `personal_categories` | Categorie personali con cartella |
-| `extension_rules` | Fallback per estensione |
+The system uses a **4-layer priority** system:
+
+1. **Memory (Level 0)**: Matches patterns from your previous manual moves.
+2. **Direct Match (Level 1)**: Instant categorization based on keywords you define.
+3. **AI Reasoning (Level 2)**: Ollama analyzes the filename and content (PDF text, Word docs) to determine the subject.
+4. **Extension Fallback (Level 3)**: Standard rule-based sorting for unrecognized files.
+5. **Unsorted (Level 4)**: The safety net for everything else.
 
 ---
 
-## 🧠 Come funziona la classificazione
+## 🌐 Dashboard & Tray Icon
 
-Il sistema usa **4 livelli** in ordine di priorità:
-
-| Livello | Metodo | Esempio |
-|---|---|---|
-| **0** | Memoria (appresa da te) | Hai spostato `prova.pdf` → ricorda |
-| **1** | Match diretto nel nome | `sistemi_reti.pdf` → Sistemi |
-| **2** | AI (Ollama/llama3.1) | `foscolo_analisi.pdf` → Italiano |
-| **3** | Fallback estensione | `.mp3` → Audio |
-| **4** | Unsorted | tutto il resto |
+- **Tray Icon**: Right-click to trigger a manual scan, open the logs, or launch the dashboard.
+- **Real-time Dashboard**: Go to `http://127.0.0.1:5000` to see live logs and manage the rules your AI has learned.
 
 ---
 
-## 🌐 Dashboard
+## 🖥️ Safe Behavior
 
-Apri la dashboard dal menu tray → **Apri dashboard** oppure vai su:
-
-```text
-http://127.0.0.1:5000
-```
-
-La dashboard mostra:
-
-- **Log attività** in tempo reale
-- **Regole apprese** con toggle on/off e modifica keywords
+- **Active Downloads**: Waits for files to finish downloading before moving.
+- **No Overwrites**: Adds a timestamp if a file already exists at the destination.
+- **Duplicate Detection**: Skips files with the same MD5 hash.
+- **Ignored Files**: Automatically ignores system files (`desktop.ini`), temp files, and shortcuts.
 
 ---
 
-## 🧠 Sistema di memoria
+## 🔧 Manual Control
 
-Lo script impara dai tuoi errori:
+Want to run it manually?
 
-1. Un file finisce in `Unsorted/`
-2. Lo sposti a mano nella cartella giusta
-3. Lo script lo nota e salva la regola in `memory/history.json`
-4. La prossima volta, file con nome simile vanno direttamente nella cartella giusta
-
-Puoi vedere e modificare le regole dalla dashboard.
+- **Silent Mode**: `scripts\vbs\start.vbs`
+- **Debug Mode**: `scripts\bat\start.bat`
 
 ---
 
-## 🖥️ Tray icon
+## 📦 Tech Stack
 
-L'organizer gira silenzioso con un'icona nella system tray (vicino all'orologio).
-
-Click destro → menu:
-
-- **Scansione manuale** — analizza tutti i file presenti ora nei Download
-- **Ferma/Avvia watcher** — pausa temporanea
-- **Apri dashboard** — apre il browser su localhost:5000
-- **Apri log** — apre PowerShell con log in tempo reale
-- **Esci** — ferma tutto
+- `watchdog`: Real-time folder monitoring.
+- `ollama`: Local LLM integration.
+- `flask`: Modern web dashboard.
+- `pystray`: Professional system tray integration.
+- `winotify`: Native Windows notifications.
 
 ---
 
-## 🛡️ Comportamento sicuro
+## 🤝 Contributing & Support
 
-| Situazione | Cosa fa |
-|---|---|
-| File ancora in download | Aspetta che smetta di crescere |
-| Estensione non riconosciuta | Va in `Unsorted/` |
-| File già esistente in destinazione | Aggiunge timestamp, non sovrascrive |
-| Duplicato esatto (stesso MD5) | Lo lascia dov'è |
-| File nelle sottocartelle | Non lo tocca |
-| File temp (`.tmp`, `.crdownload`) | Ignorati |
-| `desktop.ini`, `thumbs.db` | Ignorati |
+Feel free to open an issue or a pull request! If you like this project, **don't forget to give it a ⭐ on GitHub!**
 
----
-
-## 🔧 Avvio manuale
-
-**Silenzioso (consigliato):**
-
-```batch
-
-scripts\vbs\start.vbs
-```
-
-**Con terminale (per debug):**
-
-```batch
-
-scripts\bat\start.bat
-```
-
----
-
-## 📦 Dipendenze
-
-```text
-watchdog        — monitora la cartella download
-keyboard        — hotkey globale
-winotify        — notifiche Windows
-ollama          — client AI locale
-pymupdf         — legge PDF
-python-docx     — legge file Word
-flask           — dashboard web
-pystray         — tray icon
-Pillow          — icona tray
-```
-
-Installate automaticamente dal setup o con:
-
-```bash
-
-pip install -r requirements.txt
-
-```
+*Developed with ❤️ for organized humans.*
