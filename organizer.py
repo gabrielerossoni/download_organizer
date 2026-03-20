@@ -45,22 +45,22 @@ OLLAMA_MODEL = "llama3.1:8b"
 
 
 def print_banner(logger: logging.Logger):
-    # SESSION_START marker for dashboard filtering
-    logger.info("═══ SESSION_START ═══")
+    # NEW_SESSION marker for dashboard filtering
+    logger.info("═══ NEW_SESSION ═══")
     banner = r"""
- ██████╗ ██████╗ ██╗    ██╗███╗   ██╗██╗      ██████╗  █████╗ ██████╗ 
- ██╔══██╗██╔═══██╗██║    ██║████╗  ██║██║     ██╔═══██╗██╔══██╗██╔══██╗
- ██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║██║     ██║   ██║███████║██║  ██║
- ██║  ██║██║   ██║██║███╗██║██║╚██╗██║██║     ██║   ██║██╔══██║██║  ██║
- ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║███████╗╚██████╔╝██║  ██║██████╔╝
- ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ 
-                                                                      
-  ██████╗ ██████╗  ██████╗  █████╗ ███╗   ██╗██╗███████╗███████╗██████╗ 
- ██╔═══██╗██╔══██╗██╔════╝ ██╔══██╗████╗  ██║██║╚══███╔╝██╔════╝██╔══██╗
- ██║   ██║██████╔╝██║  ███╗███████║██╔██╗ ██║██║  ███╔╝ █████╗  ██████╔╝
- ██║   ██║██╔══██╗██║   ██║██╔══██║██║╚██╗██║██║ ███╔╝  ██╔══╝  ██╔══██╗
- ╚██████╔╝██║  ██║╚██████╔╝██║  ██║██║ ╚████║██║███████╗███████╗██║  ██║
-  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
+██████╗  ██████╗ ██╗    ██╗███╗   ██╗██╗      ██████╗  █████╗ ██████╗ 
+██╔══██╗██╔═══██╗██║    ██║████╗  ██║██║     ██╔═══██╗██╔══██╗██╔══██╗
+██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║██║     ██║   ██║███████║██║  ██║
+██║  ██║██║   ██║██║███╗██║██║╚██╗██║██║     ██║   ██║██╔══██║██║  ██║
+██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║███████╗╚██████╔╝██║  ██║██████╔╝
+╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ 
+
+ ██████╗ ██████╗  ██████╗  █████╗ ███╗   ██╗██╗███████╗███████╗██████╗ 
+██╔═══██╗██╔══██╗██╔════╝ ██╔══██╗████╗  ██║██║╚══███╔╝██╔════╝██╔══██╗
+██║   ██║██████╔╝██║  ███╗███████║██╔██╗ ██║██║  ███╔╝ █████╗  ██████╔╝
+██║   ██║██╔══██╗██║   ██║██╔══██║██║╚██╗██║██║ ███╔╝  ██╔══╝  ██╔══██╗
+╚██████╔╝██║  ██║╚██████╔╝██║  ██║██║ ╚████║██║███████╗███████╗██║  ██║
+ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
     """
     logger.info(banner)
     logger.info("⚡ Version 4.0 Pro | English Localization Active")
@@ -103,7 +103,7 @@ def setup_logger(log_path: str) -> logging.Logger:
     logger = logging.getLogger("organizer")
     logger.setLevel(logging.DEBUG)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
-    fh = logging.FileHandler(log_path, mode='w', encoding="utf-8-sig")
+    fh = logging.FileHandler(log_path, mode='a', encoding="utf-8-sig")
     fh.setFormatter(fmt)
     logger.addHandler(fh)
     ch = logging.StreamHandler()
@@ -155,7 +155,8 @@ class AIClassifier:
         personal_str = ", ".join(self.personal_cats) if self.personal_cats else "Personal"
         content_section = f'\nContent (first lines):\n"""\n{content}\n"""' if content else ""
 
-        return f"""You are a helper that classifies downloaded files for a student.
+        return f"""You are a professional AI assistant that classifies downloaded files for a student.
+The user is Italian, so many filenames and contents will be in Italian. 
 
 File Name : "{filename}"
 Extension : "{extension}"{content_section}
@@ -163,11 +164,15 @@ Extension : "{extension}"{content_section}
 Available School Subjects: {subjects_str}
 Available Personal Categories: {personal_str}
 
-Use your general knowledge to decide which category the file belongs to.
+Goal:
+Use 100% of your internal knowledge and logic to decide which category the file belongs to. 
+Do not limit yourself: recognize authors, literary movements, formulas, historical events, or technical terms in both Italian and English.
+
 Reasoning examples:
-- If the name contains an author, a literary movement, or a historical period -> deduce the subject.
-- If the content discusses networks, protocols, or code -> deduce the technical subject.
-- If it has nothing to do with school -> it is Personal.
+- Author "Dante" or "Manzoni" -> School (Letteratura/Italiano).
+- Keywords like "Equazione", "Rette", "Funzioni" -> School (Matematica).
+- Keywords like "Protocolli", "Socket", "C++" -> School (Informatica/Sistemi).
+- Anything else -> Personal.
 
 Rules:
 - Choose the category ONLY from the available lists above.
@@ -857,6 +862,10 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
 
   const addLog = (data) => {
     const box = document.getElementById("log-box");
+    if (data.msg.includes("═══ NEW_SESSION ═══")) {
+      box.innerHTML = "";
+      return;
+    }
     const line = document.createElement("div");
     line.className = `log-line ${data.level}`;
     line.innerHTML = `<span class="log-time">${data.time}</span><span class="log-level">${data.level}</span><span class="log-msg">${escHtml(data.msg)}</span>`;
@@ -976,10 +985,14 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
                         parts = line.split(" [", 1)
                         time_lvl = parts[1].split("] ", 1)
                         if len(time_lvl) == 2:
+                            msg = time_lvl[1].strip()
+                            if "═══ NEW_SESSION ═══" in msg:
+                                parsed = [] # Clear history on new session marker
+                                continue
                             parsed.append({
                                 "time": parts[0].split(" ")[1],
                                 "level": time_lvl[0],
-                                "msg": time_lvl[1].strip()
+                                "msg": msg
                             })
                 return jsonify(parsed)
         except Exception:
