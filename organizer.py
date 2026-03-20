@@ -22,7 +22,7 @@ except ImportError:
 import ollama as ollama_client
 from pathlib import Path
 from datetime import datetime
-from threading import Thread
+from threading import Thread, Lock
 import pystray
 from PIL import Image, ImageDraw
 
@@ -60,7 +60,7 @@ def setup_logger(log_path: str) -> logging.Logger:
     logger = logging.getLogger("organizer")
     logger.setLevel(logging.DEBUG)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
-    fh = logging.FileHandler(log_path, encoding="utf-8")
+    fh = logging.FileHandler(log_path, encoding="utf-8-sig")
     fh.setFormatter(fmt)
     logger.addHandler(fh)
     ch = logging.StreamHandler()
@@ -78,7 +78,6 @@ class AIClassifier:
         self.cfg    = cfg
         self.log    = logger
         self.model  = cfg.get("ollama_model", OLLAMA_MODEL)
-        self.url    = cfg.get("ollama_url", OLLAMA_URL)
         self.subjects      = [s["name"] for s in cfg.get("school_subjects", [])]
         self.personal_cats = [p["name"] for p in cfg.get("personal_categories", [])]
 
@@ -109,10 +108,9 @@ class AIClassifier:
     def _build_prompt(self, filename: str, extension: str, content: str = "") -> str:
         subjects_str = ", ".join(self.subjects) if self.subjects else "nessuna"
         personal_str = ", ".join(self.personal_cats) if self.personal_cats else "Personale"
-        
-        content_section = f'\nPrime righe del contenuto:\n"""\n{content}\n"""' if content else ""
+        content_section = f'\nContenuto (prime righe):\n"""\n{content}\n"""' if content else ""
 
-        return f"""Classifica questo file. Rispondi SOLO con JSON, nessun altro testo.
+        return f"""Sei un assistente che classifica file scaricati da uno studente italiano di scuola superiore.
 
 Nome file : "{filename}"
 Estensione: "{extension}"{content_section}
@@ -120,18 +118,17 @@ Estensione: "{extension}"{content_section}
 Materie scolastiche disponibili: {subjects_str}
 Categorie personali disponibili: {personal_str}
 
-Esempi di argomenti per materia (non esaustivi):
-- Sistemi: packet tracer, cisco, reti, router, switch, protocolli, TCP/IP, firewall, VLAN
-- Informatica: programmazione, algoritmo, python, java, database, SQL, codice
-- Matematica: equazioni, algebra, geometria, calcolo, disequazioni, integrali
-- Italiano: letteratura, dante, grammatica, analisi, tema, poesia, autore
-- Storia: guerra, rivoluzione, impero, medioevo, fascismo, risorgimento
-- Telecomunicazioni: segnali, frequenze, modulazione, antenna, fibra
-- Tecnologie: elettronica, circuiti, componenti, Arduino
+Usa le tue conoscenze generali per capire a quale materia appartiene il file.
+Esempi di ragionamento che devi fare autonomamente:
+- Se il nome contiene un autore, un movimento letterario, un periodo storico → deduci la materia
+- Se il contenuto parla di reti, protocolli, codice → deduci la materia tecnica
+- Se non ha nulla a che fare con la scuola → è personale
 
-Se il nome o il contenuto del nome suggerisce uno di questi argomenti, classifica nella materia corrispondente.
-Se è personale (foto vacanze, musica, giochi ecc.) classifica come personale.
-Se non sei sicuro almeno al 70%, usa unsure.
+Regole:
+- Scegli la categoria SOLO tra quelle disponibili nella lista
+- Se non sei sicuro almeno al 70%, usa unsure
+- Un file .ini, .db, .lnk è sempre da ignorare — rispondi unsure
+- Non inventare categorie fuori dalla lista
 
 Rispondi SOLO con questo JSON:
 {{"type": "scuola|personale|unsure", "category": "nome_esatto_dalla_lista", "confidence": 0.0, "reason": "breve"}}"""
@@ -236,6 +233,19 @@ class Memoria:
             return best_rule["dest"]
         return None
     
+    def add_pending(self, filename: str):
+        if not hasattr(self, '_pending'):
+            self._pending = {}
+        self._pending[filename] = time.time()
+
+    def resolve_pending(self, dest_path: Path):
+        if not hasattr(self, '_pending'):
+            return
+        name = dest_path.name
+        if name in self._pending:
+            del self._pending[name]
+            self.learn(name, str(dest_path.parent))
+    
 # ─────────────────────────────────────────────
 # MONITORAGGIO
 # ─────────────────────────────────────────────
@@ -252,7 +262,14 @@ class UnsureWatcher(FileSystemEventHandler):
             # Il file è stato spostato fuori da File_Sconosciuti verso una cartella reale
             if dest.parent != src.parent:
                 self.log.info(f"Memoria: spostamento manuale rilevato: {src.name} → {dest.parent}")
-                self.memoria.learn(src.name, str(dest.parent))    
+                self.memoria.learn(src.name, str(dest.parent))
+                
+    def on_deleted(self, event):
+        if not event.is_directory:
+            src = Path(event.src_path)
+            # Salva in pending — non sappiamo ancora la destinazione
+            self.log.debug(f"Memoria: file rimosso da File_Sconosciuti: {src.name}")
+            self.memoria.add_pending(src.name)                               
 
 # ─────────────────────────────────────────────
 # CORE ORGANIZER
@@ -267,6 +284,7 @@ class Organizer:
         self.unsure_dir = Path(cfg.get("unsure_folder_path", str(self.dl_dir / "Da_Smistare")))
         self.ai         = AIClassifier(cfg, logger)
         self.memoria = Memoria(logger)
+        self._scan_lock = Lock()
 
         # Mappa nome_materia (lowercase) → Path
         self.subject_map: dict[str, Path] = {
@@ -285,7 +303,7 @@ class Organizer:
         for rule in cfg.get("extension_rules", []):
             if rule.get("folder"):
                 for ext in rule["extensions"]:
-                    self.ext_map[ext.lower()] = Path(rule["folder"])
+                    self.ext_map[ext.lower()] = Path(rule["folder"])            
 
         if self.dry_run:
             self.log.warning("=== DRY RUN — nessun file verrà spostato ===")
@@ -353,7 +371,7 @@ class Organizer:
             return
         if path.parent != self.dl_dir:
             return
-        if path.name.startswith(".") or path.suffix.lower() in (".tmp", ".crdownload", ".part", ".download"):
+        if path.name.startswith(".") or path.name in ("desktop.ini", "thumbs.db") or path.suffix.lower() in (".tmp", ".crdownload", ".part", ".download", ".ini", ".db", ".lnk"):
             return
 
         time.sleep(self.cfg.get("wait_seconds", 3))
@@ -417,12 +435,18 @@ class Organizer:
         self._notify(f"❓ {path.name}", "Non classificato → File_Sconosciuti/")
 
     def scan_all(self):
-        self.log.info("── Scansione manuale ──")
-        files = [f for f in self.dl_dir.iterdir() if f.is_file()]
-        self.log.info(f"   {len(files)} file trovati")
-        for f in files:
-            self.process_file(f)
-        self.log.info("── Fine scansione ──")
+        if not self._scan_lock.acquire(blocking=False):
+            self.log.debug("Scansione già in corso, skip")
+            return
+        try:
+            self.log.info("── Scansione manuale ──")
+            files = [f for f in self.dl_dir.iterdir() if f.is_file()]
+            self.log.info(f"   {len(files)} file trovati")
+            for f in files:
+                self.process_file(f)
+            self.log.info("── Fine scansione ──")
+        finally:
+            self._scan_lock.release()
 
     def _notify(self, title: str, msg: str):
         try:
@@ -443,6 +467,8 @@ class DownloadHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory:
             Thread(target=self.org.process_file, args=(Path(event.src_path),), daemon=True).start()
+            # Controlla se era in pending (l'utente l'ha spostato da File_Sconosciuti qui)
+            self.org.memoria.resolve_pending(Path(event.src_path))    
 
     def on_moved(self, event):
         if not event.is_directory:
@@ -490,8 +516,13 @@ def create_tray_icon(org, observer, logger, tray_state):
             logger.info("Watcher riavviato da tray")
 
     def on_open_log(icon, item):
-        os.startfile(str(Path(__file__).parent / "organizer.log"))
-
+        log_path = str(Path(__file__).parent / "organizer.log")
+        WshShell = __import__("subprocess")
+        WshShell.Popen([
+            "powershell", "-NoExit", "-Command",
+            f"Get-Content '{log_path}' -Wait -Tail 30 -Encoding UTF8"
+        ])
+        
     def on_exit(icon, item):
         logger.info("Chiusura da tray...")
         icon.stop()
@@ -542,7 +573,7 @@ def main():
     
     # Watcher su File_Sconosciuti per imparare dagli spostamenti manuali
     unsure_watcher = UnsureWatcher(org.memoria, logger)
-    observer2       = Observer()
+    observer2      = Observer()
     observer2.schedule(unsure_watcher, str(org.unsure_dir), recursive=False)
     try:
         org.unsure_dir.mkdir(parents=True, exist_ok=True)
@@ -550,6 +581,34 @@ def main():
         logger.info(f"Memoria attiva su: {org.unsure_dir}")
     except Exception as e:
         logger.warning(f"Memoria non attiva: {e}")
+
+    # Watcher su tutte le cartelle destinazione per resolve_pending
+    observer3 = Observer()
+    dest_dirs = set()
+    for s in cfg.get("school_subjects", []):
+        if s.get("folder"):
+            dest_dirs.add(s["folder"])
+    for p in cfg.get("personal_categories", []):
+        if p.get("folder"):
+            dest_dirs.add(p["folder"])
+    for r in cfg.get("extension_rules", []):
+        if r.get("folder"):
+            dest_dirs.add(r["folder"])
+
+    class DestWatcher(FileSystemEventHandler):
+        def on_created(self, event):
+            if not event.is_directory:
+                org.memoria.resolve_pending(Path(event.src_path))
+
+    dest_handler = DestWatcher()
+    for d in dest_dirs:
+        try:
+            Path(d).mkdir(parents=True, exist_ok=True)
+            observer3.schedule(dest_handler, d, recursive=False)
+        except Exception:
+            pass
+    observer3.start()
+    logger.info(f"Memoria: in ascolto su {len(dest_dirs)} cartelle destinazione")
 
     hotkey = cfg.get("hotkey", "ctrl+shift+o")
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
@@ -568,6 +627,11 @@ def main():
         try:
             observer2.stop()
             observer2.join()
+        except Exception:
+            pass
+        try:
+            observer3.stop()
+            observer3.join()
         except Exception:
             pass
         logger.info("═══ Fermato ═══")
