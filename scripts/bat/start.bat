@@ -13,7 +13,7 @@ if %errorlevel% neq 0 (
 )
 
 echo  [1/3] Installazione dipendenze...
-set ROOT=%~dp0..
+set ROOT=%~dp0..\..
 pip install -r "%ROOT%\requirements.txt" --quiet 2>nul
 tasklist /fi "imagename eq ollama.exe" 2>nul | find /i "ollama.exe" >nul
 if %errorlevel% neq 0 (

@@ -1,77 +1,127 @@
 # 📁 Download Organizer
 
-Organizza automaticamente la cartella Download in background.
-**Safe-first**: se non sa dove mettere un file, lo mette in `Da_Smistare/` — non cancella mai nulla.
+Organizza automaticamente la cartella Download in background usando AI locale (Ollama).
+**Safe-first**: se non è sicuro dove mettere un file, va in `Unsorted/` — non cancella mai nulla.
 
 ---
 
-## 🚀 Primo avvio
+## 🚀 Installazione
 
-1. Assicurati di avere **Python 3.8+** installato
-2. Fai doppio click su **`avvia.bat`**
-   - Installa le dipendenze automaticamente
-   - Avvia l'organizer in ascolto
+### Requisiti
 
-Per avviarlo **ad ogni login** senza finestre: esegui `aggiungi_avvio.bat`
+- **Python 3.10+** — [python.org](https://python.org)
+- **Ollama** — [ollama.com](https://ollama.com)
+- Un modello Ollama installato (consigliato: `llama3.1:8b`)
 
----
-
-## ⚙️ Configurazione — `config.json`
-
-Il file viene creato automaticamente al primo avvio. Modificalo a piacere:
-
-```json
-{
-  "download_folder": "C:\\Users\\TuoNome\\Downloads",
-  "unsure_folder": "Da_Smistare",
-  "hotkey": "ctrl+shift+o",
-  "wait_seconds": 3,
-  "min_size_bytes": 100,
-  "log_file": "organizer.log",
-  "dry_run": false,
-  "rules": [...]
-}
+```bash
+ollama pull llama3.1:8b
 ```
+
+### Setup
+
+1. Fai doppio click su **`Setup_DownloadOrganizer.exe`**
+2. Compila le cartelle per ogni materia e categoria
+3. Clicca **Salva e installa**
+4. Il setup installa le dipendenze, crea il config e aggiunge lo script all'avvio automatico
+
+---
+
+## 📂 Struttura progetto
+
+```
+Download Organizer/
+├── Setup.bat                     ← esegui questo per installare
+├── organizer.py                  ← script principale
+├── requirements.txt
+├── README.md
+│
+├── config/
+│   ├── config.json               ← generato dal setup
+│   └── setup_wizard.py           ← wizard CLI alternativo
+│
+├── memory/
+│   └── history.json              ← regole apprese automaticamente
+│
+├── scripts/
+│   ├── vbs/
+│   │   ├── start.vbs              ← avvio silenzioso (usato da startup)
+│   │   └── stop.vbs               ← ferma l'organizer
+│   └── bat/
+│       ├── start.bat              ← avvio con terminale (per debug)
+│       └── add_to_startup.bat     ← aggiunge manualmente ad avvio automatico
+```
+
+---
+
+## ⚙️ Configurazione — `config/config.json`
 
 | Chiave | Descrizione |
 |---|---|
 | `download_folder` | Cartella da monitorare |
-| `unsure_folder` | Sottocartella per file non riconosciuti |
+| `unsure_folder_path` | Percorso assoluto per file non classificati |
+| `ollama_model` | Modello Ollama da usare |
 | `hotkey` | Tasto per scansione manuale |
-| `wait_seconds` | Secondi di attesa prima di spostare (evita file in download) |
-| `min_size_bytes` | Ignora file più piccoli di X byte |
-| `dry_run` | `true` = simula senza spostare nulla (ottimo per testare) |
-| `rules` | Lista regole personalizzabili (vedi sotto) |
+| `wait_seconds` | Secondi di attesa prima di spostare |
+| `dry_run` | `true` = simula senza spostare |
+| `school_subjects` | Materie con cartella destinazione |
+| `personal_categories` | Categorie personali con cartella |
+| `extension_rules` | Fallback per estensione |
 
 ---
 
-## 📋 Regole personalizzate
+## 🧠 Come funziona la classificazione
 
-Ogni regola ha questa forma:
+Il sistema usa **4 livelli** in ordine di priorità:
 
-```json
-{
-  "name": "Immagini",
-  "folder": "Immagini",
-  "extensions": [".jpg", ".png", ".gif"]
-}
+| Livello | Metodo | Esempio |
+|---|---|---|
+| **0** | Memoria (appresa da te) | Hai spostato `prova.pdf` → ricorda |
+| **1** | Match diretto nel nome | `sistemi_reti.pdf` → Sistemi |
+| **2** | AI (Ollama/llama3.1) | `foscolo_analisi.pdf` → Italiano |
+| **3** | Fallback estensione | `.mp3` → Audio |
+| **4** | Unsorted | tutto il resto |
+
+---
+
+## 🌐 Dashboard
+
+Apri la dashboard dal menu tray → **Apri dashboard** oppure vai su:
+
+```text
+http://127.0.0.1:5000
 ```
 
-- **`name`**: nome descrittivo (solo per i log)
-- **`folder`**: nome della sottocartella destinazione (creata automaticamente)
-- **`extensions`**: lista estensioni da catturare
+La dashboard mostra:
 
-Puoi aggiungere, rimuovere o modificare regole liberamente.
-L'ordine conta: vince la prima regola che matcha.
+- **Log attività** in tempo reale
+- **Regole apprese** con toggle on/off e modifica keywords
 
 ---
 
-## 🔑 Hotkey
+## 🧠 Sistema di memoria
 
-Di default: **`Ctrl + Shift + O`**
+Lo script impara dai tuoi errori:
 
-Forza una scansione di tutti i file presenti nei Download in quel momento.
-Modificabile nel `config.json` con qualsiasi combinazione supportata da `keyboard`.
+1. Un file finisce in `Unsorted/`
+2. Lo sposti a mano nella cartella giusta
+3. Lo script lo nota e salva la regola in `memory/history.json`
+4. La prossima volta, file con nome simile vanno direttamente nella cartella giusta
+
+Puoi vedere e modificare le regole dalla dashboard.
+
+---
+
+## 🖥️ Tray icon
+
+L'organizer gira silenzioso con un'icona nella system tray (vicino all'orologio).
+
+Click destro → menu:
+
+- **Scansione manuale** — analizza tutti i file presenti ora nei Download
+- **Ferma/Avvia watcher** — pausa temporanea
+- **Apri dashboard** — apre il browser su localhost:5000
+- **Apri log** — apre PowerShell con log in tempo reale
+- **Esci** — ferma tutto
 
 ---
 
@@ -80,35 +130,51 @@ Modificabile nel `config.json` con qualsiasi combinazione supportata da `keyboar
 | Situazione | Cosa fa |
 |---|---|
 | File ancora in download | Aspetta che smetta di crescere |
-| File troppo piccolo (placeholder) | Lo ignora |
-| Estensione non riconosciuta | Va in `Da_Smistare/` |
-| File già esistente nella destinazione | Aggiunge timestamp, non sovrascrive |
-| Duplicato esatto (stesso hash MD5) | Lo lascia dov'è |
+| Estensione non riconosciuta | Va in `Unsorted/` |
+| File già esistente in destinazione | Aggiunge timestamp, non sovrascrive |
+| Duplicato esatto (stesso MD5) | Lo lascia dov'è |
 | File nelle sottocartelle | Non lo tocca |
-| File temporanei (`.tmp`, `.part`, `.crdownload`) | Ignorati |
+| File temp (`.tmp`, `.crdownload`) | Ignorati |
+| `desktop.ini`, `thumbs.db` | Ignorati |
 
 ---
 
-## 📄 Log
+## 🔧 Avvio manuale
 
-Tutto viene registrato in `organizer.log` nella stessa cartella dello script.
+**Silenzioso (consigliato):**
 
----
+```batch
 
-## 🗂️ Struttura cartelle risultante
-
+scripts\vbs\start.vbs
 ```
-Downloads/
-├── Immagini/
-├── Video/
-├── Audio/
-├── Documenti/
-├── Archivi/
-├── Programmi/
-├── Codice/
-├── Font/
-├── eBook/
-├── Modelli3D/
-├── Torrent/
-└── Da_Smistare/      ← file non riconosciuti
+
+**Con terminale (per debug):**
+
+```batch
+
+scripts\bat\start.bat
+```
+
+---
+
+## 📦 Dipendenze
+
+```text
+watchdog        — monitora la cartella download
+keyboard        — hotkey globale
+winotify        — notifiche Windows
+ollama          — client AI locale
+pymupdf         — legge PDF
+python-docx     — legge file Word
+flask           — dashboard web
+pystray         — tray icon
+Pillow          — icona tray
+```
+
+Installate automaticamente dal setup o con:
+
+```bash
+
+pip install -r requirements.txt
+
 ```

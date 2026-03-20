@@ -104,7 +104,7 @@ def main():
     print(f"  {SEP}")
     print("  [2] CARTELLA PER FILE NON RICONOSCIUTI")
     print(f"  {SEP}")
-    default_unsure = str(Path(download_folder) / "Da_Smistare")
+    default_unsure = str(Path(download_folder) / "Unsorted")
     unsure_path = ask_path("Dove mettere i file incerti", default_unsure)
 
     # ── 3. Ollama ─────────────────────────────
@@ -132,7 +132,7 @@ def main():
     print("  [5] CARTELLE MATERIE SCOLASTICHE")
     print(f"  {SEP}")
     print("  Per ogni materia inserisci il percorso ASSOLUTO della cartella.")
-    print("  Invio vuoto = materia saltata (file vanno in Da_Smistare).")
+    print("  Invio vuoto = materia saltata (file vanno in Unsorted).")
     print()
 
     school_subjects = []
@@ -194,7 +194,7 @@ def main():
     print("  ╚" + "═"*52 + "╝")
     print()
     print(f"  Download    : {download_folder}")
-    print(f"  Da_Smistare : {unsure_path}")
+    print(f"  Unsorted    : {unsure_path}")
     print(f"  Modello AI  : {ollama_model}")
     print(f"  Hotkey      : {hotkey}")
     print(f"  Attesa      : {wait_secs}s  |  Dry run: {'SÌ ⚠' if dry_run else 'no'}")
@@ -241,7 +241,7 @@ def main():
 
     print()
     print(f"  ✓ Salvato: {CONFIG_PATH}")
-    print("  → Ora avvia organizer con  avvia.bat")
+    print("  → Ora avvia organizer con  scripts\\bat\\start.bat")
     print()
     input("  Premi Invio per uscire...")
 

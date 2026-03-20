@@ -1,3 +1,20 @@
-.history
-organizer.log
-memoria.json
+# Repository and history
+.history/
+memory/history.json
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# App Config (avoid sharing local paths)
+config/config.json

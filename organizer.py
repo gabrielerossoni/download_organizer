@@ -39,7 +39,7 @@ except ImportError:
 
 CONFIG_PATH  = Path(__file__).parent / "config" / "config.json"
 listeners = []  # connessioni SSE attive
-MEMORIA_PATH = Path(__file__).parent / "memory" / "memoria.json"
+MEMORIA_PATH = Path(__file__).parent / "memory" / "history.json"
 LOG_QUEUE = queue.Queue(maxsize=500)  # coda eventi per SSE
 OLLAMA_MODEL = "llama3.1:8b"
 
@@ -50,7 +50,7 @@ OLLAMA_MODEL = "llama3.1:8b"
 
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
-        print("[ERRORE] config.json non trovato. Esegui prima 1_SETUP_PRIMA.bat")
+        print("[ERRORE] config.json non trovato. Esegui prima Setup.bat")
         sys.exit(1)
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -305,7 +305,7 @@ class Organizer:
         self.log        = logger
         self.dry_run    = cfg.get("dry_run", False)
         self.dl_dir     = Path(cfg["download_folder"])
-        self.unsure_dir = Path(cfg.get("unsure_folder_path", str(self.dl_dir / "Da_Smistare")))
+        self.unsure_dir = Path(cfg.get("unsure_folder_path", str(self.dl_dir / "Unsorted")))
         self.ai         = AIClassifier(cfg, logger)
         self.memoria = Memoria(logger)
         self._scan_lock = Lock()
@@ -452,10 +452,10 @@ class Organizer:
                 self._notify(f"📁 {path.name}", f"Spostato → {dest.name}")
             return
 
-        # LIVELLO 4 — File_Sconosciuti
-        self.log.info(f"? Nessuna categoria: {path.name} → File_Sconosciuti/")
+        # LIVELLO 4 — Unsorted
+        self.log.info(f"? Nessuna categoria: {path.name} → Unsorted/")
         self._move(path, self.unsure_dir, "[unsure]")
-        self._notify(f"❓ {path.name}", "Non classificato → File_Sconosciuti/")
+        self._notify(f"❓ {path.name}", "Non classificato → Unsorted/")
 
     def scan_all(self):
         if not self._scan_lock.acquire(blocking=False):
@@ -503,13 +503,30 @@ class DownloadHandler(FileSystemEventHandler):
 def create_tray_icon(org, observer, logger, tray_state):
 
     def make_icon_image(active: bool = True) -> Image.Image:
-        img  = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        size = (64, 64)
+        img  = Image.new("RGBA", size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        color = (255, 255, 255, 255) if active else (120, 120, 120, 255)
-        # Cartella: base
-        draw.rectangle([6, 22, 58, 54], fill=color)
-        # Linguetta
-        draw.rectangle([6, 14, 26, 23], fill=color)
+        
+        # Colore principale: Ciano (vibrante) per attivo, Grigio per inattivo
+        main_color = (79, 195, 247, 255) if active else (120, 120, 120, 255)
+        dark_color = (21, 101, 192, 255) if active else (80, 80, 80, 255)
+        
+        # Disegna la cartella
+        # Linguetta superiore
+        draw.chord([8, 12, 28, 28], 180, 270, fill=main_color)
+        draw.rectangle([18, 12, 28, 20], fill=main_color)
+        
+        # Corpo della cartella con effetto 3D (due tonalità)
+        draw.rectangle([8, 20, 56, 54], fill=main_color)
+        draw.rectangle([8, 32, 56, 54], fill=dark_color)
+        
+        # Freccia Download al centro (Bianca)
+        arrow_color = (255, 255, 255, 255)
+        # Gambo freccia
+        draw.rectangle([30, 24, 34, 40], fill=arrow_color)
+        # Punta freccia
+        draw.polygon([(24, 38), (40, 38), (32, 48)], fill=arrow_color)
+        
         return img
 
     state = {"running": True, "handler": DownloadHandler(org), "dl_dir": str(org.dl_dir)}
@@ -787,7 +804,7 @@ def main():
         ollama_client.list()
         logger.info("Ollama: connesso ✓")
     except Exception:
-        logger.warning("⚠ Ollama non raggiungibile — i file andranno in Da_Smistare finché non parte")
+        logger.warning("⚠ Ollama non raggiungibile — i file andranno in Unsorted finché non parte")
 
     org      = Organizer(cfg, logger)
     handler  = DownloadHandler(org)

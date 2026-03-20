@@ -13,7 +13,7 @@ echo.
 :: Crea un .vbs che lancia lo script senza finestra visibile
 (
 echo Set WshShell = CreateObject^("WScript.Shell"^)
-echo WshShell.Run "cmd /c python ""%SCRIPT_DIR%organizer.py""", 0, False
+echo WshShell.Run "cmd /c python ""%SCRIPT_DIR%..\..\organizer.py""", 0, False
 ) > "%VBS_FILE%"
 
 if exist "%VBS_FILE%" (
