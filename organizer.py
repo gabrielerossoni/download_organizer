@@ -44,6 +44,22 @@ LOG_QUEUE = queue.Queue(maxsize=500)  # coda eventi per SSE
 OLLAMA_MODEL = "llama3.1:8b"
 
 
+def print_banner(logger: logging.Logger):
+    banner = r"""
+    ___               _                 _ 
+   |   \  ___ __ __ _ | | ___  __ _  __| |
+   | |  |/ _ \\ V  V /| |/ _ \/ _` |/ _` |
+   |___/ \___/ \_/\_/ |_|\___/\__,_|\__,_|
+    ___                             _               
+   / _ \  _ _  __ _  __ _  _ _ (_) ___ ___  _ _ 
+  | (_) || '_|/ _` |/ _` || ' \| ||_ // -_)| '_|
+   \___/ |_|  \__, |\__,_||_||_|_|/__|\___||_|  
+              |___/                             
+    """
+    logger.info(banner)
+    logger.info("⚡ Version 4.0 Pro | English Localization Active")
+    logger.info("─" * 50)
+
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
@@ -129,32 +145,32 @@ class AIClassifier:
         return ""
     
     def _build_prompt(self, filename: str, extension: str, content: str = "") -> str:
-        subjects_str = ", ".join(self.subjects) if self.subjects else "nessuna"
-        personal_str = ", ".join(self.personal_cats) if self.personal_cats else "Personale"
-        content_section = f'\nContenuto (prime righe):\n"""\n{content}\n"""' if content else ""
+        subjects_str = ", ".join(self.subjects) if self.subjects else "none"
+        personal_str = ", ".join(self.personal_cats) if self.personal_cats else "Personal"
+        content_section = f'\nContent (first lines):\n"""\n{content}\n"""' if content else ""
 
-        return f"""Sei un assistente che classifica file scaricati da uno studente italiano di scuola superiore.
+        return f"""You are a helper that classifies downloaded files for a student.
 
-Nome file : "{filename}"
-Estensione: "{extension}"{content_section}
+File Name : "{filename}"
+Extension : "{extension}"{content_section}
 
-Materie scolastiche disponibili: {subjects_str}
-Categorie personali disponibili: {personal_str}
+Available School Subjects: {subjects_str}
+Available Personal Categories: {personal_str}
 
-Usa le tue conoscenze generali per capire a quale materia appartiene il file.
-Esempi di ragionamento che devi fare autonomamente:
-- Se il nome contiene un autore, un movimento letterario, un periodo storico → deduci la materia
-- Se il contenuto parla di reti, protocolli, codice → deduci la materia tecnica
-- Se non ha nulla a che fare con la scuola → è personale
+Use your general knowledge to decide which category the file belongs to.
+Reasoning examples:
+- If the name contains an author, a literary movement, or a historical period -> deduce the subject.
+- If the content discusses networks, protocols, or code -> deduce the technical subject.
+- If it has nothing to do with school -> it is Personal.
 
-Regole:
-- Scegli la categoria SOLO tra quelle disponibili nella lista
-- Se non sei sicuro almeno al 70%, usa unsure
-- Un file .ini, .db, .lnk è sempre da ignorare — rispondi unsure
-- Non inventare categorie fuori dalla lista
+Rules:
+- Choose the category ONLY from the available lists above.
+- If you are less than 70% sure, use 'unsure'.
+- .ini, .db, .lnk files should always be 'unsure'.
+- Do not invent categories outside the list.
 
-Rispondi SOLO con questo JSON:
-{{"type": "scuola|personale|unsure", "category": "nome_esatto_dalla_lista", "confidence": 0.0, "reason": "breve"}}"""
+Respond ONLY with this JSON:
+{{"type": "school|personal|unsure", "category": "exact_name_from_list", "confidence": 0.0, "reason": "short explanation in English"}}"""
     
     def classify(self, path: Path, extension: str) -> dict:
         filename = path.name
@@ -162,7 +178,7 @@ Rispondi SOLO con questo JSON:
         try:
             content = self._extract_text(path)
             if content:
-                self.log.debug(f"   Testo estratto: {len(content)} caratteri")
+                self.log.debug(f"   Extracted text: {len(content)} chars")
             response = ollama_client.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": self._build_prompt(filename, extension, content)}],
@@ -172,37 +188,38 @@ Rispondi SOLO con questo JSON:
             raw = raw.strip("`").replace("```json", "").replace("```", "").strip()
             result = json.loads(raw)
 
-            # Normalizza varianti che il modello può restituire
+            # Normalize model variations
             type_map = {
-                "scuola": "scuola", "scolastico": "scuola", "school": "scuola",
-                "personale": "personale", "personal": "personale",
-                "unsure": "unsure", "unknown": "unsure", "incerto": "unsure"
+                "school": "school", "scholastic": "school", "scuola": "school",
+                "personal": "personal", "personale": "personal",
+                "unsure": "unsure", "unknown": "unsure"
             }
             raw_type = result.get("type", "").lower().strip()
             normalized = type_map.get(raw_type)
             if not normalized:
-                raise ValueError(f"type non valido: {raw_type}")
+                raise ValueError(f"Invalid type: {raw_type}")
             result["type"] = normalized
             
             if float(result.get("confidence", 0)) < 0.70:
-                self.log.debug(f"Confidenza bassa ({result.get('confidence'):.2f}) per '{filename}'")
+                self.log.debug(f"🧠 Low confidence ({result.get('confidence'):.2f}) for '{filename}'")
                 return UNSURE
             return result
         except ollama_client.ResponseError as e:
-            self.log.warning(f"Ollama errore modello '{filename}': {e}")
+            self.log.warning(f"🧠 AI: Model error on '{filename}': {e}")
             return {**UNSURE, "reason": str(e)}
         except Exception as e:
-            self.log.warning(f"Errore AI su '{filename}': {e}")
+            self.log.warning(f"🧠 AI: Error on '{filename}': {e}")
             return {**UNSURE, "reason": str(e)}
 
 # ─────────────────────────────────────────────
-# MEMORIA
+# MEMORY
 # ─────────────────────────────────────────────
 class Memoria:
     def __init__(self, logger: logging.Logger):
-        self.log  = logger
-        self.path = MEMORIA_PATH
-        self.rules: list[dict] = self._load()
+        self.log   = logger
+        self.path  = MEMORIA_PATH
+        self.rules = self._load()
+        self.pending = {} # filename -> timestamp
 
     def _load(self) -> list:
         try:
@@ -218,29 +235,29 @@ class Memoria:
             with open(self.path, "w", encoding="utf-8") as f:
                 json.dump(self.rules, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            self.log.warning(f"Memoria: errore salvataggio: {e}")
+            self.log.warning(f"🧠 Memory: error saving history: {e}")
 
     def learn(self, filename: str, dest_path: str):
-        """Salva una regola imparata da uno spostamento manuale."""
+        """Saves a rule learned from a manual move."""
         stem = Path(filename).stem.lower()
-        # Estrai parole significative (>3 caratteri)
+        # Extract meaningful keywords (>3 chars)
         words = [w for w in stem.replace("_", " ").replace("-", " ").split() if len(w) > 3]
         if not words:
             return
-        # Controlla se esiste già una regola simile
+        # Check if a similar rule already exists
         for rule in self.rules:
             if rule["dest"] == dest_path and any(w in rule["keywords"] for w in words):
-                # Aggiorna keywords e hits
+                # Update keywords and hits
                 rule["keywords"] = list(set(rule["keywords"] + words))
                 rule["hits"] = rule.get("hits", 0) + 1
                 self._save()
-                self.log.info(f"Memoria: regola aggiornata per '{dest_path}' (hits={rule['hits']})")
+                self.log.info(f"🧠 Memory: updated rule for '{Path(dest_path).name}' (hits={rule['hits']})")
                 return
-        # Nuova regola
+        # New rule
         rule = {"keywords": words, "dest": dest_path, "hits": 1, "example": filename}
         self.rules.append(rule)
         self._save()
-        self.log.info(f"Memoria: nuova regola da '{filename}' → '{Path(dest_path).name}' (keywords: {words})")
+        self.log.info(f"🧠 Memory: new rule from '{filename}' → '{Path(dest_path).name}' (tags: {words})")
 
     def match(self, filename: str) -> str | None:
         stem = Path(filename).stem.lower()
@@ -258,23 +275,19 @@ class Memoria:
         return None
     
     def add_pending(self, filename: str):
-        if not hasattr(self, '_pending'):
-            self._pending = {}
-        self._pending[filename] = time.time()
+        self.pending[filename] = time.time()
 
     def resolve_pending(self, dest_path: Path):
-        if not hasattr(self, '_pending'):
-            return
         name = dest_path.name
-        if name in self._pending:
-            del self._pending[name]
+        if name in self.pending:
+            del self.pending[name]
             self.learn(name, str(dest_path.parent))
     
 # ─────────────────────────────────────────────
-# MONITORAGGIO
+# WATCHDOG
 # ─────────────────────────────────────────────
 class UnsureWatcher(FileSystemEventHandler):
-    """Monitora File_Sconosciuti — impara quando l'utente sposta un file a mano."""
+    """Monitors Unsorted folder — learns when the user moves a file manually."""
     def __init__(self, memoria: Memoria, logger: logging.Logger):
         self.memoria = memoria
         self.log     = logger
@@ -283,17 +296,17 @@ class UnsureWatcher(FileSystemEventHandler):
         if not event.is_directory:
             src  = Path(event.src_path)
             dest = Path(event.dest_path)
-            # Il file è stato spostato fuori da File_Sconosciuti verso una cartella reale
+            # File moved out of Unsorted to another folder
             if dest.parent != src.parent:
-                self.log.info(f"Memoria: spostamento manuale rilevato: {src.name} → {dest.parent}")
+                self.log.info(f"🧠 Memory: manual move detected: {src.name} → {dest.parent.name}/")
                 self.memoria.learn(src.name, str(dest.parent))
                 
     def on_deleted(self, event):
         if not event.is_directory:
             src = Path(event.src_path)
-            # Salva in pending — non sappiamo ancora la destinazione
-            self.log.debug(f"Memoria: file rimosso da File_Sconosciuti: {src.name}")
-            self.memoria.add_pending(src.name)                               
+            # Add to pending — destination not yet known
+            self.log.debug(f"🧠 Memory: file removed from Unsorted: {src.name}")
+            self.memoria.add_pending(src.name)
 
 # ─────────────────────────────────────────────
 # CORE ORGANIZER
@@ -331,7 +344,7 @@ class Organizer:
                     self.ext_map[ext.lower()] = Path(rule["folder"])            
 
         if self.dry_run:
-            self.log.warning("=== DRY RUN — nessun file verrà spostato ===")
+            self.log.warning("⚠ DRY RUN — no files will be moved")
 
     # ── Utilità ──────────────────────────────
 
@@ -341,10 +354,10 @@ class Organizer:
             time.sleep(1.5)
             s2 = path.stat().st_size
             if s1 != s2:
-                self.log.debug(f"Ancora in scrittura: {path.name}")
+                self.log.debug(f"Still writing: {path.name}")
                 return False
             if s2 < self.cfg.get("min_size_bytes", 100):
-                self.log.debug(f"Troppo piccolo, skip: {path.name}")
+                self.log.debug(f"Too small, skipping: {path.name}")
                 return False
             return True
         except (FileNotFoundError, PermissionError):
@@ -370,7 +383,7 @@ class Organizer:
 
             if dest.exists():
                 if self._same_file(src, dest):
-                    self.log.info(f"Duplicato esatto, skip: {src.name}")
+                    self.log.info(f"Duplicate found, skipping: {src.name}")
                     return False
                 ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
                 dest = dest_dir / f"{src.stem}_{ts}{src.suffix}"
@@ -385,10 +398,10 @@ class Organizer:
             return True
 
         except PermissionError:
-            self.log.warning(f"Permesso negato: {src.name}")
+            self.log.warning(f"Permission denied: {src.name}")
             return False
         except Exception as e:
-            self.log.error(f"Errore spostando {src.name}: {e}")
+            self.log.error(f"Error moving {src.name}: {e}")
             return False
 
     # ── Logica principale ─────────────────────
@@ -404,72 +417,72 @@ class Organizer:
             return
         
         ext = path.suffix.lower()
-        self.log.info(f"── Analisi: {path.name}")
+        self.log.info(f"── Analyzing: {path.name}")
         name_lower = path.stem.lower()
         
-        # LIVELLO 0 — memoria (spostamenti manuali precedenti)
+        # LEVEL 0 — Memory (Previous manual moves)
         learned_dest = self.memoria.match(path.name)
         if learned_dest:
             dest = Path(learned_dest)
             if dest.exists():
-                self.log.info(f"   Memoria: match → {dest.name}")
-                if self._move(path, dest, "[memoria]"):
-                    self._notify(f"🧠 {path.name}", f"Da memoria → {dest.name}")
+                self.log.info(f"   Memory match: {dest.name}")
+                if self._move(path, dest, "[memory]"):
+                    self._notify(f"🧠 {path.name}", f"From memory → {dest.name}")
                 return
 
-        # LIVELLO 1 — nome contiene esattamente il nome di una materia
+        # LEVEL 1 — Direct keyword match
         for subject in self.cfg.get("school_subjects", []):
             subj_name = subject["name"].lower()
             if subj_name in name_lower and subject.get("folder"):
-                self.log.info(f"   Match diretto: '{subject['name']}'")
+                self.log.info(f"   Direct match: '{subject['name']}'")
                 dest = Path(subject["folder"])
-                if self._move(path, dest, f"[diretto/{subject['name']}]"):
-                    self._notify(f"📚 {path.name}", f"Scuola → {subject['name']}")
+                if self._move(path, dest, f"[direct/{subject['name']}]"):
+                    self._notify(f"📚 {path.name}", f"School → {subject['name']}")
                 return
 
-        # LIVELLO 2 — AI (soglia 60%)
+        # LEVEL 2 — AI (Threshold 60%)
         result = self.ai.classify(path, ext)
         rtype  = result.get("type")
         cat    = result.get("category", "").lower().strip()
-        self.log.debug(f"   AI → {rtype} / {cat} (conf={result.get('confidence', 0):.2f}) — {result.get('reason','')}")
+        self.log.debug(f"   AI Category: {rtype} / {cat} (conf={result.get('confidence', 0):.2f}) — {result.get('reason','')}")
 
-        if rtype == "scuola" and cat:
+        if rtype == "school" and cat:
             dest = self.subject_map.get(cat)
             if dest:
-                if self._move(path, dest, f"[scuola/{cat}]"):
-                    self._notify(f"📚 {path.name}", f"Scuola → {cat}")
+                if self._move(path, dest, f"[school/{cat}]"):
+                    self._notify(f"📚 {path.name}", f"School → {cat}")
                 return
 
-        if rtype == "personale" and cat:
+        if rtype == "personal" and cat:
             dest = self.personal_map.get(cat)
             if dest:
-                if self._move(path, dest, f"[personale/{cat}]"):
-                    self._notify(f"🗂 {path.name}", f"Personale → {cat}")
+                if self._move(path, dest, f"[personal/{cat}]"):
+                    self._notify(f"🗂 {path.name}", f"Personal → {cat}")
                 return
 
-        # LIVELLO 3 — fallback estensione
+        # LEVEL 3 — Extension Fallback
         dest = self.ext_map.get(ext)
         if dest:
             if self._move(path, dest, f"[ext/{ext}]"):
-                self._notify(f"📁 {path.name}", f"Spostato → {dest.name}")
+                self._notify(f"📁 {path.name}", f"Moved → {dest.name}")
             return
 
-        # LIVELLO 4 — Unsorted
-        self.log.info(f"? Nessuna categoria: {path.name} → Unsorted/")
+        # LEVEL 4 — Unsorted
+        self.log.info(f"❓ No category found: {path.name} → Unsorted/")
         self._move(path, self.unsure_dir, "[unsure]")
-        self._notify(f"❓ {path.name}", "Non classificato → Unsorted/")
+        self._notify(f"❓ {path.name}", "Not classified → Unsorted/")
 
     def scan_all(self):
         if not self._scan_lock.acquire(blocking=False):
-            self.log.debug("Scansione già in corso, skip")
+            self.log.debug("Scan already in progress, skipping")
             return
         try:
-            self.log.info("── Scansione manuale ──")
+            self.log.info("── Manual Scan Started ──")
             files = [f for f in self.dl_dir.iterdir() if f.is_file()]
-            self.log.info(f"   {len(files)} file trovati")
+            self.log.info(f"   {len(files)} files found")
             for f in files:
                 self.process_file(f)
-            self.log.info("── Fine scansione ──")
+            self.log.info("── Scan Finished ──")
         finally:
             self._scan_lock.release()
 
@@ -548,8 +561,8 @@ def create_tray_icon(org, observer, logger, tray_state):
             observer.join()
             state["running"] = False
             icon.icon = make_icon_image(active=False)
-            icon.title = "Download Organizer — fermo"
-            logger.info("Watcher fermato da tray")
+            icon.title = "Download Organizer — stopped"
+            logger.info("Watcher stopped via Tray")
         else:
             new_obs = Observer()
             new_obs.schedule(state["handler"], state["dl_dir"], recursive=False)
@@ -558,8 +571,8 @@ def create_tray_icon(org, observer, logger, tray_state):
             tray_state["new_obs"] = new_obs
             state["running"] = True
             icon.icon = make_icon_image(active=True)
-            icon.title = "Download Organizer — attivo"
-            logger.info("Watcher riavviato da tray")
+            icon.title = "Download Organizer — active"
+            logger.info("Watcher restarted via Tray")
 
     def on_open_log(icon, item):
         log_path = str(Path(__file__).parent / "organizer.log")
@@ -574,26 +587,26 @@ def create_tray_icon(org, observer, logger, tray_state):
         webbrowser.open("http://127.0.0.1:5000")    
         
     def on_exit(icon, item):
-        logger.info("Chiusura da tray...")
+        logger.info("Shutting down via Tray...")
         icon.stop()
 
     def get_toggle_label(item=None):
-        return "Ferma watcher" if state["running"] else "Avvia watcher"
+        return "Stop Watcher" if state["running"] else "Start Watcher"
 
     menu = pystray.Menu(
-        pystray.MenuItem("Scansione manuale",  on_scan, default=True),
+        pystray.MenuItem("Manual Scan",         on_scan, default=True),
         pystray.MenuItem(get_toggle_label,     on_toggle),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Apri dashboard",     on_open_dashboard),
-        pystray.MenuItem("Apri log",           on_open_log),
+        pystray.MenuItem("Open Dashboard",      on_open_dashboard),
+        pystray.MenuItem("Open Logs",           on_open_log),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Esci",               on_exit),
+        pystray.MenuItem("Exit",                on_exit),
     )
 
     return pystray.Icon(
         name="download_organizer",
         icon=make_icon_image(),
-        title="Download Organizer — attivo",
+        title="Download Organizer — active",
         menu=menu
     )
 
@@ -607,7 +620,7 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
     log.setLevel(logging.ERROR)
 
     HTML = """<!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -776,32 +789,32 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
 
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-label">Files Organizzati</div>
+      <div class="stat-label">Files Organized</div>
       <div class="stat-value" id="stat-count">0</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Modello AI</div>
+      <div class="stat-label">AI Model</div>
       <div class="stat-value" style="font-size:1.1rem" id="stat-model">---</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Memoria</div>
-      <div class="stat-value" style="font-size:1.1rem"><span id="stat-rules">0</span> Regole</div>
+      <div class="stat-label">Memory</div>
+      <div class="stat-value" style="font-size:1.1rem"><span id="stat-rules">0</span> Rules</div>
     </div>
   </div>
 
   <div class="main-grid">
     <div class="card">
-      <h2><i data-lucide="terminal" size="18"></i> Log Attività</h2>
+      <h2><i data-lucide="terminal" size="18"></i> Activity Logs</h2>
       <div class="log-container" id="log-box"></div>
     </div>
 
     <div class="card">
-      <h2><i data-lucide="brain" size="18"></i> Regole Apprese</h2>
+      <h2><i data-lucide="brain" size="18"></i> Learned Rules</h2>
       <div class="rules-list" id="rules-box">
-        <div class="empty-state">Nessuna regola salvata.</div>
+        <div class="empty-state">No rules saved yet.</div>
       </div>
       <button class="refresh-btn" onclick="loadRules()">
-        <i data-lucide="rotate-cw" size="18"></i> Aggiorna Regole
+        <i data-lucide="rotate-cw" size="18"></i> Refresh Rules
       </button>
     </div>
   </div>
@@ -822,7 +835,7 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
         if (data.msg.includes("✓") || data.msg.includes("→")) {
           updateStats();
         }
-        if (data.msg.includes("Memoria:")) {
+        if (data.msg.includes("Memory:")) {
           loadRules();
         }
       } catch (err) { console.error("Parse error", err); }
@@ -855,7 +868,7 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
       document.getElementById("stat-rules").textContent = rules.length;
       
       if (rules.length === 0) {
-        box.innerHTML = '<div class="empty-state">Nessuna regola ancora disponibile. Sposta i file da "Unsorted" per insegnare all\\'organizer!</div>';
+        box.innerHTML = '<div class="empty-state">No rules available yet. Move files from "Unsorted" to teach the organizer!</div>';
         return;
       }
 
@@ -878,7 +891,7 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
   };
 
   const deleteRule = (i) => {
-    if (!confirm("Eliminare questa regola?")) return;
+    if (!confirm("Delete this rule?")) return;
     fetch(`/api/rules/${i}`, {method:"DELETE"}).then(() => loadRules());
   };
 
@@ -901,6 +914,11 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
 
   setupSSE();
   loadRules();
+  
+  // Load log history
+  fetch("/api/logs").then(r => r.json()).then(logs => {
+    logs.forEach(addLog);
+  });
   updateStats();
   setInterval(updateStats, 5000);
 </script>
@@ -937,6 +955,29 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
     def get_rules():
         return jsonify(org.memoria.rules)
 
+    @app.route("/api/logs")
+    def get_logs():
+        log_path = Path(__file__).parent / "organizer.log"
+        if not log_path.exists():
+            return jsonify([])
+        try:
+            with open(log_path, "r", encoding="utf-8-sig") as f:
+                lines = f.readlines()[-100:]
+                parsed = []
+                for line in lines:
+                    if " [" in line and "] " in line:
+                        parts = line.split(" [", 1)
+                        time_lvl = parts[1].split("] ", 1)
+                        if len(time_lvl) == 2:
+                            parsed.append({
+                                "time": parts[0].split(" ")[1],
+                                "level": time_lvl[0],
+                                "msg": time_lvl[1].strip()
+                            })
+                return jsonify(parsed)
+        except Exception:
+            return jsonify([])
+
     @app.route("/api/stats")
     def get_stats():
         online = False
@@ -968,15 +1009,13 @@ def main():
     log_p  = Path(__file__).parent / cfg.get("log_file", "organizer.log")
     logger = setup_logger(str(log_p))
 
-    logger.info("═══ Download Organizer v3 (Ollama) ═══")
-    logger.info(f"Modello : {cfg.get('ollama_model', OLLAMA_MODEL)}")
-    logger.info(f"Cartella: {cfg['download_folder']}")
+    print_banner(logger)
 
     try:
         ollama_client.list()
-        logger.info("Ollama: connesso ✓")
+        logger.info("🧠 Ollama: Connected ✔")
     except Exception:
-        logger.warning("⚠ Ollama non raggiungibile — i file andranno in Unsorted finché non parte")
+        logger.warning("⚠ Ollama unreachable — files will go to 'Unsorted' until AI is online.")
 
     org      = Organizer(cfg, logger)
     handler  = DownloadHandler(org)
@@ -984,16 +1023,16 @@ def main():
     observer.schedule(handler, str(org.dl_dir), recursive=False)
     observer.start()
     
-    # Watcher su File_Sconosciuti per imparare dagli spostamenti manuali
+    # Unsorted watcher to learn from manual moves
     unsure_watcher = UnsureWatcher(org.memoria, logger)
     observer2      = Observer()
     observer2.schedule(unsure_watcher, str(org.unsure_dir), recursive=False)
     try:
         org.unsure_dir.mkdir(parents=True, exist_ok=True)
         observer2.start()
-        logger.info(f"Memoria attiva su: {org.unsure_dir}")
+        logger.info(f"🧠 Memory active on: {org.unsure_dir}")
     except Exception as e:
-        logger.warning(f"Memoria non attiva: {e}")
+        logger.warning(f"⚠ Memory inactive: {e}")
 
     # Watcher su tutte le cartelle destinazione per resolve_pending
     observer3 = Observer()
@@ -1012,7 +1051,7 @@ def main():
         def on_created(self, event):
             if not event.is_directory:
                 p = Path(event.src_path)
-                logger.debug(f"DestWatcher: file arrivato in {p.parent.name}: {p.name}")
+                logger.debug(f"DestWatcher: file arrived in {p.parent.name}: {p.name}")
                 org.memoria.resolve_pending(p)
 
     dest_handler = DestWatcher()
@@ -1023,11 +1062,11 @@ def main():
         except Exception:
             pass
     observer3.start()
-    logger.info(f"Memoria: in ascolto su {len(dest_dirs)} cartelle destinazione")
+    logger.info(f"🧠 Memory: listening on {len(dest_dirs)} destination folders")
 
     hotkey = cfg.get("hotkey", "ctrl+shift+o")
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
-    logger.info(f"Watcher attivo | Hotkey: {hotkey} | Ctrl+C per fermare")
+    logger.info(f"⚡ Watcher active | Hotkey: {hotkey} | Ctrl+C to stop")
 
     app = create_dashboard(org, logger)
     flask_thread = Thread(
@@ -1035,14 +1074,14 @@ def main():
         daemon=True
     )
     flask_thread.start()
-    logger.info("Dashboard: http://127.0.0.1:5000")
+    logger.info("🌐 Dashboard: http://127.0.0.1:5000")
     
-    # Avvia tray icon (blocca il thread principale)
+    # Start tray icon (blocks main thread)
     tray_state = {}
     tray = create_tray_icon(org, observer, logger, tray_state)
 
     try:
-        tray.run()  # bloccante fino a "Esci"
+        tray.run()  # blocks until "Exit"
     finally:
         active_obs = tray_state.get("new_obs", observer)
         active_obs.stop()
@@ -1057,7 +1096,7 @@ def main():
             observer3.join()
         except Exception:
             pass
-        logger.info("═══ Fermato ═══")
+        logger.info("═══ Stopped ═══")
 
 
 if __name__ == "__main__":
