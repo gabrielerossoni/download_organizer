@@ -107,4 +107,8 @@ Want to run it manually?
 
 Feel free to open an issue or a pull request! If you like this project, **don't forget to give it a ⭐ on GitHub!**
 
+## 📄 License
+
+This project is licensed under the [MIT License](LICENSE).
+
 *Developed with ❤️ for organized humans.*
