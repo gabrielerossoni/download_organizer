@@ -3,8 +3,11 @@ On Error Resume Next
 Dim WshShell, fso, ScriptDir
 Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
-ScriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+ScriptDir = fso.GetParentFolderName(fso.GetParentFolderName(WScript.ScriptFullName))
 WshShell.CurrentDirectory = ScriptDir
+
+' [0/2] Installazione dipendenze
+WshShell.Run "pythonw -m pip install -r """ & ScriptDir & "\requirements.txt"" --quiet", 0, True
 WScript.Sleep 30000
 
 ' [1/2] Ollama — check via WMI senza finestre
