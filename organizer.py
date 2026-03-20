@@ -8,6 +8,8 @@ import shutil
 import logging
 import json
 import hashlib
+from flask import Flask, jsonify, request, Response, render_template_string
+import queue
 try:
     import fitz  # pymupdf
     HAS_PDF = True
@@ -36,7 +38,9 @@ except ImportError:
     sys.exit(1)
 
 CONFIG_PATH  = Path(__file__).parent / "config.json"
+listeners = []  # connessioni SSE attive
 MEMORIA_PATH = Path(__file__).parent / "memoria.json"
+LOG_QUEUE = queue.Queue(maxsize=500)  # coda eventi per SSE
 OLLAMA_MODEL = "llama3.1:8b"
 
 
@@ -56,6 +60,23 @@ def load_config() -> dict:
 # LOGGER
 # ─────────────────────────────────────────────
 
+class SSEHandler(logging.Handler):
+    def emit(self, record):
+        item = {
+            "time": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
+            "level": record.levelname,
+            "msg": record.getMessage()
+        }
+        try:
+            LOG_QUEUE.put_nowait(item)
+        except queue.Full:
+            pass
+        for q in listeners:
+            try:
+                q.put_nowait(item)
+            except queue.Full:
+                pass
+                
 def setup_logger(log_path: str) -> logging.Logger:
     logger = logging.getLogger("organizer")
     logger.setLevel(logging.DEBUG)
@@ -66,8 +87,10 @@ def setup_logger(log_path: str) -> logging.Logger:
     ch = logging.StreamHandler()
     ch.setFormatter(fmt)
     logger.addHandler(ch)
+    sse = SSEHandler()
+    sse.setLevel(logging.INFO)
+    logger.addHandler(sse)
     return logger
-
 
 # ─────────────────────────────────────────────
 # CLASSIFICATORE AI (Ollama)
@@ -220,11 +243,12 @@ class Memoria:
         self.log.info(f"Memoria: nuova regola da '{filename}' → '{Path(dest_path).name}' (keywords: {words})")
 
     def match(self, filename: str) -> str | None:
-        """Controlla se il file matcha una regola. Ritorna il path destinazione o None."""
         stem = Path(filename).stem.lower()
         best_rule  = None
         best_score = 0
         for rule in self.rules:
+            if not rule.get("enabled", True):
+                continue
             score = sum(1 for kw in rule["keywords"] if kw in stem)
             if score > best_score:
                 best_score = score
@@ -338,6 +362,7 @@ class Organizer:
             return False
 
     def _move(self, src: Path, dest_dir: Path, label: str = "") -> bool:
+        time.sleep(self.cfg.get("wait_seconds", 3))
         try:
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest = dest_dir / src.name
@@ -373,11 +398,9 @@ class Organizer:
             return
         if path.name.startswith(".") or path.name in ("desktop.ini", "thumbs.db") or path.suffix.lower() in (".tmp", ".crdownload", ".part", ".download", ".ini", ".db", ".lnk"):
             return
-
-        time.sleep(self.cfg.get("wait_seconds", 3))
         if not self._is_ready(path):
             return
-
+        
         ext = path.suffix.lower()
         self.log.info(f"── Analisi: {path.name}")
         name_lower = path.stem.lower()
@@ -521,6 +544,10 @@ def create_tray_icon(org, observer, logger, tray_state):
             f"Get-Content '{log_path}' -Wait -Tail 30 -Encoding UTF8"
         ])
         
+    def on_open_dashboard(icon, item):
+        import webbrowser
+        webbrowser.open("http://127.0.0.1:5000")    
+        
     def on_exit(icon, item):
         logger.info("Chiusura da tray...")
         icon.stop()
@@ -529,12 +556,13 @@ def create_tray_icon(org, observer, logger, tray_state):
         return "Ferma watcher" if state["running"] else "Avvia watcher"
 
     menu = pystray.Menu(
-        pystray.MenuItem("Scansione manuale", on_scan, default=True),
-        pystray.MenuItem(get_toggle_label,    on_toggle),
+        pystray.MenuItem("Scansione manuale",  on_scan, default=True),
+        pystray.MenuItem(get_toggle_label,     on_toggle),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Apri log",          on_open_log),
+        pystray.MenuItem("Apri dashboard",     on_open_dashboard),
+        pystray.MenuItem("Apri log",           on_open_log),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("Esci",              on_exit),
+        pystray.MenuItem("Esci",               on_exit),
     )
 
     return pystray.Icon(
@@ -543,6 +571,203 @@ def create_tray_icon(org, observer, logger, tray_state):
         title="Download Organizer — attivo",
         menu=menu
     )
+
+# ─────────────────────────────────────────────
+# DASHBOARD
+# ─────────────────────────────────────────────
+
+def create_dashboard(org: Organizer, logger: logging.Logger):
+    app = Flask(__name__)
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.ERROR)
+
+    HTML = """<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Download Organizer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0d0d0d; color: #e0e0e0; padding: 24px; }
+  h1 { color: #fff; font-size: 1.3em; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+  h1 span { color: #4fc3f7; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 18px; }
+  .card h2 { font-size: 0.8em; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+  .log-box { height: 340px; overflow-y: auto; background: #0a0a0a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.78em; }
+  .log-line { padding: 2px 0; border-bottom: 1px solid #111; line-height: 1.6; }
+  .log-line .t { color: #555; margin-right: 8px; }
+  .log-line.INFO .msg { color: #e0e0e0; }
+  .log-line.DEBUG .msg { color: #666; }
+  .log-line.WARNING .msg { color: #ffb74d; }
+  .log-line.ERROR .msg { color: #ef5350; }
+  .rule { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #222; }
+  .rule .keywords { flex: 1; font-size: 0.82em; color: #aaa; }
+  .rule .dest { font-size: 0.8em; color: #4fc3f7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rule .hits { font-size: 0.75em; color: #555; min-width: 50px; text-align: right; }
+  .toggle { width: 36px; height: 20px; background: #333; border-radius: 10px; cursor: pointer; position: relative; transition: background 0.2s; border: none; }
+  .toggle.on { background: #4fc3f7; }
+  .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s; }
+  .toggle.on::after { left: 19px; }
+  .btn-del { background: none; border: none; color: #ef5350; cursor: pointer; font-size: 1em; padding: 0 4px; }
+  .btn-del:hover { color: #ff6b6b; }
+  .edit-input { background: #111; border: 1px solid #333; color: #e0e0e0; padding: 3px 6px; border-radius: 4px; font-size: 0.8em; width: 100%; }
+  .badge { background: #1e3a4a; color: #4fc3f7; padding: 2px 8px; border-radius: 10px; font-size: 0.72em; }
+  .empty { color: #555; font-size: 0.85em; padding: 10px 0; }
+  .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e1e1e; font-size: 0.85em; }
+  .stat span:last-child { color: #4fc3f7; font-weight: bold; }
+  #status { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; display: inline-block; }
+</style>
+</head>
+<body>
+<h1><span id="status"></span> Download Organizer &nbsp;<span style="color:#555;font-size:0.8em">dashboard</span></h1>
+<div class="grid">
+
+  <div class="card">
+    <h2>📋 Log attività <span class="badge" id="log-count">0</span></h2>
+    <div class="log-box" id="log-box"></div>
+  </div>
+
+  <div class="card">
+    <h2>🧠 Regole apprese <span class="badge" id="rule-count">0</span></h2>
+    <div id="rules-box"><div class="empty">Nessuna regola ancora.</div></div>
+    <div style="margin-top:12px">
+      <button onclick="loadRules()" style="background:#1e3a4a;border:none;color:#4fc3f7;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8em">↻ Aggiorna</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let logCount = 0;
+
+// SSE — log in tempo reale
+const evtSource = new EventSource("/stream");
+evtSource.onmessage = function(e) {
+  const data = JSON.parse(e.data);
+  const box = document.getElementById("log-box");
+  const line = document.createElement("div");
+  line.className = "log-line " + data.level;
+  line.innerHTML = '<span class="t">' + data.time + '</span><span class="msg">' + escHtml(data.msg) + '</span>';
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+  logCount++;
+  document.getElementById("log-count").textContent = logCount;
+};
+
+function escHtml(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Carica regole
+function loadRules() {
+  fetch("/api/rules").then(r => r.json()).then(rules => {
+    const box = document.getElementById("rules-box");
+    document.getElementById("rule-count").textContent = rules.length;
+    if (rules.length === 0) {
+      box.innerHTML = '<div class="empty">Nessuna regola ancora.</div>';
+      return;
+    }
+    box.innerHTML = rules.map((r, i) => `
+      <div class="rule" id="rule-${i}">
+        <button class="toggle ${r.enabled !== false ? 'on' : ''}" onclick="toggleRule(${i})" title="Abilita/Disabilita"></button>
+        <div style="flex:1;min-width:0">
+          <div class="keywords" id="kw-${i}" onclick="editKw(${i})" title="Clicca per modificare">${r.keywords.join(', ')}</div>
+          <div class="dest" title="${r.dest}">${r.dest.split('\\\\').pop() || r.dest.split('/').pop()}</div>
+        </div>
+        <div class="hits">${r.hits} hit</div>
+        <button class="btn-del" onclick="deleteRule(${i})" title="Elimina">✕</button>
+      </div>
+    `).join('');
+  });
+}
+
+function toggleRule(i) {
+  fetch("/api/rules/" + i + "/toggle", {method:"POST"})
+    .then(r => r.json()).then(() => loadRules());
+}
+
+function deleteRule(i) {
+  if (!confirm("Eliminare questa regola?")) return;
+  fetch("/api/rules/" + i, {method:"DELETE"})
+    .then(r => r.json()).then(() => loadRules());
+}
+
+function editKw(i) {
+  const el = document.getElementById("kw-" + i);
+  const current = el.textContent;
+  el.innerHTML = '<input class="edit-input" id="edit-'+i+'" value="'+current+'" onblur="saveKw('+i+')" onkeydown="if(event.key===\'Enter\')saveKw('+i+')">';
+  document.getElementById("edit-"+i).focus();
+}
+
+function saveKw(i) {
+  const val = document.getElementById("edit-"+i)?.value;
+  if (!val) return;
+  fetch("/api/rules/" + i + "/keywords", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({keywords: val.split(',').map(k => k.trim()).filter(Boolean)})
+  }).then(r => r.json()).then(() => loadRules());
+}
+
+loadRules();
+</script>
+</body>
+</html>"""
+
+    @app.route("/")
+    def index():
+        return render_template_string(HTML)
+
+    @app.route("/stream")
+    def stream():
+        def event_stream():
+            # Manda gli ultimi 50 log già in coda
+            items = list(LOG_QUEUE.queue)[-50:]
+            for item in items:
+                yield f"data: {json.dumps(item)}\n\n"
+            # Poi ascolta nuovi eventi
+            q = queue.Queue()
+            listeners.append(q)
+            try:
+                while True:
+                    try:
+                        item = q.get(timeout=30)
+                        yield f"data: {json.dumps(item)}\n\n"
+                    except queue.Empty:
+                        yield ": ping\n\n"  # keepalive
+            finally:
+                listeners.remove(q)
+        return Response(event_stream(), mimetype="text/event-stream")
+
+    @app.route("/api/rules")
+    def get_rules():
+        return jsonify(org.memoria.rules)
+
+    @app.route("/api/rules/<int:i>", methods=["DELETE"])
+    def delete_rule(i):
+        if 0 <= i < len(org.memoria.rules):
+            org.memoria.rules.pop(i)
+            org.memoria._save()
+        return jsonify({"ok": True})
+
+    @app.route("/api/rules/<int:i>/toggle", methods=["POST"])
+    def toggle_rule(i):
+        if 0 <= i < len(org.memoria.rules):
+            r = org.memoria.rules[i]
+            r["enabled"] = not r.get("enabled", True)
+            org.memoria._save()
+        return jsonify({"ok": True})
+
+    @app.route("/api/rules/<int:i>/keywords", methods=["POST"])
+    def update_keywords(i):
+        if 0 <= i < len(org.memoria.rules):
+            data = request.get_json()
+            org.memoria.rules[i]["keywords"] = data.get("keywords", [])
+            org.memoria._save()
+        return jsonify({"ok": True})
+
+    return app
 
 # ─────────────────────────────────────────────
 # MAIN
@@ -614,6 +839,14 @@ def main():
     keyboard.add_hotkey(hotkey, lambda: Thread(target=org.scan_all, daemon=True).start())
     logger.info(f"Watcher attivo | Hotkey: {hotkey} | Ctrl+C per fermare")
 
+    app = create_dashboard(org, logger)
+    flask_thread = Thread(
+        target=lambda: app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False, threaded=True),
+        daemon=True
+    )
+    flask_thread.start()
+    logger.info("Dashboard: http://127.0.0.1:5000")
+    
     # Avvia tray icon (blocca il thread principale)
     tray_state = {}
     tray = create_tray_icon(org, observer, logger, tray_state)
