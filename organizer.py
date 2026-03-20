@@ -466,9 +466,7 @@ class DownloadHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         if not event.is_directory:
-            Thread(target=self.org.process_file, args=(Path(event.src_path),), daemon=True).start()
-            # Controlla se era in pending (l'utente l'ha spostato da File_Sconosciuti qui)
-            self.org.memoria.resolve_pending(Path(event.src_path))    
+            Thread(target=self.org.process_file, args=(Path(event.src_path),), daemon=True).start()   
 
     def on_moved(self, event):
         if not event.is_directory:
@@ -598,7 +596,9 @@ def main():
     class DestWatcher(FileSystemEventHandler):
         def on_created(self, event):
             if not event.is_directory:
-                org.memoria.resolve_pending(Path(event.src_path))
+                p = Path(event.src_path)
+                logger.debug(f"DestWatcher: file arrivato in {p.parent.name}: {p.name}")
+                org.memoria.resolve_pending(p)
 
     dest_handler = DestWatcher()
     for d in dest_dirs:
