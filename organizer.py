@@ -103,7 +103,7 @@ def setup_logger(log_path: str) -> logging.Logger:
     logger = logging.getLogger("organizer")
     logger.setLevel(logging.DEBUG)
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%Y-%m-%d %H:%M:%S")
-    fh = logging.FileHandler(log_path, encoding="utf-8-sig")
+    fh = logging.FileHandler(log_path, mode='w', encoding="utf-8-sig")
     fh.setFormatter(fmt)
     logger.addHandler(fh)
     ch = logging.StreamHandler()
@@ -723,9 +723,10 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
     font-size: 0.85rem;
     border: 1px solid rgba(255,255,255,0.03);
   }
-  .log-line { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.02); animation: fadeIn 0.3s ease; }
-  .log-time { color: var(--text-dim); margin-right: 12px; }
-  .log-level { font-weight: 600; margin-right: 10px; width: 60px; display: inline-block; }
+  .log-msg { white-space: pre-wrap; word-break: break-all; }
+  .log-line { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.02); animation: fadeIn 0.3s ease; display: flex; align-items: flex-start; }
+  .log-time { color: var(--text-dim); margin-right: 12px; font-size: 0.8rem; flex-shrink: 0; }
+  .log-level { font-weight: 600; margin-right: 10px; width: 60px; flex-shrink: 0; }
   .INFO .log-level { color: var(--accent); }
   .WARNING .log-level { color: #ffb74d; }
   .ERROR .log-level { color: var(--danger); }
@@ -968,17 +969,9 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
             return jsonify([])
         try:
             with open(log_path, "r", encoding="utf-8-sig") as f:
-                all_lines = f.readlines()
-                # Find the LAST SESSION_START
-                start_idx = 0
-                for i in range(len(all_lines) - 1, -1, -1):
-                    if "SESSION_START" in all_lines[i]:
-                        start_idx = i
-                        break
-                
-                session_lines = all_lines[start_idx:]
+                lines = f.readlines()
                 parsed = []
-                for line in session_lines:
+                for line in lines:
                     if " [" in line and "] " in line:
                         parts = line.split(" [", 1)
                         time_lvl = parts[1].split("] ", 1)
