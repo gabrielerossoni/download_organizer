@@ -660,6 +660,7 @@ let logCount = 0;
 
 // SSE — log in tempo reale
 const evtSource = new EventSource("/stream");
+
 evtSource.onmessage = function(e) {
   const data = JSON.parse(e.data);
   const box = document.getElementById("log-box");
@@ -670,8 +671,22 @@ evtSource.onmessage = function(e) {
   box.scrollTop = box.scrollHeight;
   logCount++;
   document.getElementById("log-count").textContent = logCount;
-  if (data.msg.includes("Memoria:")) loadRules(); setInterval(loadRules, 10000);
+  
+  // Se il log indica un cambiamento di memoria, aggiorna subito le regole
+  if (data.msg.includes("Memoria:")) loadRules();
 };
+
+evtSource.onerror = function(e) {
+  console.error("SSE Error:", e);
+  document.getElementById("status").style.background = "#ef5350"; // Rosso se errore
+};
+
+evtSource.onopen = function() {
+  document.getElementById("status").style.background = "#4caf50"; // Verde se ok
+};
+
+// Poll delle regole ogni 10 secondi per sicurezza
+setInterval(loadRules, 10000);
 
 function escHtml(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
