@@ -307,7 +307,8 @@ class Organizer:
         self.dl_dir     = Path(cfg["download_folder"])
         self.unsure_dir = Path(cfg.get("unsure_folder_path", str(self.dl_dir / "Unsorted")))
         self.ai         = AIClassifier(cfg, logger)
-        self.memoria = Memoria(logger)
+        self.memoria    = Memoria(logger)
+        self.moved_count = 0
         self._scan_lock = Lock()
 
         # Mappa nome_materia (lowercase) → Path
@@ -379,6 +380,7 @@ class Organizer:
                 return True
 
             shutil.move(str(src), str(dest))
+            self.moved_count += 1
             self.log.info(f"✓ {src.name} → {dest_dir.name}/ {label}")
             return True
 
@@ -503,31 +505,37 @@ class DownloadHandler(FileSystemEventHandler):
 def create_tray_icon(org, observer, logger, tray_state):
 
     def make_icon_image(active: bool = True) -> Image.Image:
-        size = (64, 64)
+        size = (128, 128) # Higher res for better quality
         img  = Image.new("RGBA", size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
         
-        # Colore principale: Ciano (vibrante) per attivo, Grigio per inattivo
-        main_color = (79, 195, 247, 255) if active else (120, 120, 120, 255)
-        dark_color = (21, 101, 192, 255) if active else (80, 80, 80, 255)
+        # Professional Colors
+        base_cyan = (79, 195, 247, 255) if active else (140, 140, 140, 255)
+        deep_blue = (2, 119, 189, 255) if active else (100, 100, 100, 255)
+        glow_color = (129, 212, 250, 255) if active else (160, 160, 160, 255)
         
-        # Disegna la cartella
-        # Linguetta superiore
-        draw.chord([8, 12, 28, 28], 180, 270, fill=main_color)
-        draw.rectangle([18, 12, 28, 20], fill=main_color)
+        # 1. Shadow / Base depth
+        draw.rounded_rectangle([15, 30, 113, 110], radius=12, fill=(0, 0, 0, 60))
         
-        # Corpo della cartella con effetto 3D (due tonalità)
-        draw.rectangle([8, 20, 56, 54], fill=main_color)
-        draw.rectangle([8, 32, 56, 54], fill=dark_color)
+        # 2. Main Folder Body (Gradient-like effect using layers)
+        draw.rounded_rectangle([12, 28, 110, 105], radius=12, fill=deep_blue)
+        draw.rounded_rectangle([12, 45, 110, 105], radius=12, fill=base_cyan)
         
-        # Freccia Download al centro (Bianca)
-        arrow_color = (255, 255, 255, 255)
-        # Gambo freccia
-        draw.rectangle([30, 24, 34, 40], fill=arrow_color)
-        # Punta freccia
-        draw.polygon([(24, 38), (40, 38), (32, 48)], fill=arrow_color)
+        # 3. Folder Tab
+        draw.rounded_rectangle([12, 15, 50, 35], radius=8, fill=base_cyan)
         
-        return img
+        # 4. Perspective highlight (Gloss)
+        draw.rounded_rectangle([20, 50, 102, 60], radius=4, fill=(255, 255, 255, 40))
+        
+        # 5. Download Arrow (White with slight glow)
+        white = (255, 255, 255, 255)
+        # Glow
+        draw.rectangle([58, 38, 70, 75], fill=glow_color)
+        # Main Arrow
+        draw.rectangle([60, 40, 68, 70], fill=white) # Stem
+        draw.polygon([(48, 65), (80, 65), (64, 85)], fill=white) # Head
+        
+        return img.resize((64, 64), Image.Resampling.LANCZOS)
 
     state = {"running": True, "handler": DownloadHandler(org), "dl_dir": str(org.dl_dir)}
 
@@ -602,148 +610,299 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<title>Download Organizer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Download Organizer Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest"></script>
 <style>
+  :root {
+    --bg: #05070a;
+    --card: rgba(255, 255, 255, 0.03);
+    --border: rgba(255, 255, 255, 0.08);
+    --accent: #4fc3f7;
+    --accent-glow: rgba(79, 195, 247, 0.3);
+    --text: #e0e6ed;
+    --text-dim: #8492a6;
+    --danger: #ff5252;
+    --success: #00e676;
+  }
+  
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', sans-serif; background: #0d0d0d; color: #e0e0e0; padding: 24px; }
-  h1 { color: #fff; font-size: 1.3em; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
-  h1 span { color: #4fc3f7; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-  .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 10px; padding: 18px; }
-  .card h2 { font-size: 0.8em; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
-  .log-box { height: 340px; overflow-y: auto; background: #0a0a0a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.78em; }
-  .log-line { padding: 2px 0; border-bottom: 1px solid #111; line-height: 1.6; }
-  .log-line .t { color: #555; margin-right: 8px; }
-  .log-line.INFO .msg { color: #e0e0e0; }
-  .log-line.DEBUG .msg { color: #666; }
-  .log-line.WARNING .msg { color: #ffb74d; }
-  .log-line.ERROR .msg { color: #ef5350; }
-  .rule { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #222; }
-  .rule .keywords { flex: 1; font-size: 0.82em; color: #aaa; }
-  .rule .dest { font-size: 0.8em; color: #4fc3f7; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rule .hits { font-size: 0.75em; color: #555; min-width: 50px; text-align: right; }
-  .toggle { width: 36px; height: 20px; background: #333; border-radius: 10px; cursor: pointer; position: relative; transition: background 0.2s; border: none; }
-  .toggle.on { background: #4fc3f7; }
-  .toggle::after { content: ''; position: absolute; width: 14px; height: 14px; background: #fff; border-radius: 50%; top: 3px; left: 3px; transition: left 0.2s; }
-  .toggle.on::after { left: 19px; }
-  .btn-del { background: none; border: none; color: #ef5350; cursor: pointer; font-size: 1em; padding: 0 4px; }
-  .btn-del:hover { color: #ff6b6b; }
-  .edit-input { background: #111; border: 1px solid #333; color: #e0e0e0; padding: 3px 6px; border-radius: 4px; font-size: 0.8em; width: 100%; }
-  .badge { background: #1e3a4a; color: #4fc3f7; padding: 2px 8px; border-radius: 10px; font-size: 0.72em; }
-  .empty { color: #555; font-size: 0.85em; padding: 10px 0; }
-  .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1e1e1e; font-size: 0.85em; }
-  .stat span:last-child { color: #4fc3f7; font-weight: bold; }
-  #status { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; display: inline-block; }
+  body { 
+    font-family: 'Outfit', sans-serif; 
+    background: var(--bg); 
+    background-image: radial-gradient(circle at 10% 20%, rgba(79, 195, 247, 0.05) 0%, transparent 40%), 
+                      radial-gradient(circle at 90% 80%, rgba(2, 119, 189, 0.05) 0%, transparent 40%);
+    color: var(--text); 
+    padding: 30px;
+    min-height: 100vh;
+  }
+
+  .container { max-width: 1200px; margin: 0 auto; }
+  
+  header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    margin-bottom: 40px; 
+    backdrop-filter: blur(10px);
+    padding: 20px;
+    border-radius: 20px;
+    background: var(--card);
+    border: 1px solid var(--border);
+  }
+  
+  .logo { display: flex; align-items: center; gap: 15px; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.5px; }
+  .logo i { color: var(--accent); filter: drop-shadow(0 0 8px var(--accent-glow)); }
+  
+  .status-pill { 
+    display: flex; 
+    align-items: center; 
+    gap: 8px; 
+    background: rgba(0, 0, 0, 0.3); 
+    padding: 6px 16px; 
+    border-radius: 100px; 
+    font-size: 0.85rem;
+    border: 1px solid var(--border);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); transition: 0.3s; }
+  .status-dot.online { background: var(--success); box-shadow: 0 0 10px var(--success); }
+  .status-dot.offline { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+  .stat-card { 
+    background: var(--card); 
+    border: 1px solid var(--border); 
+    padding: 20px; 
+    border-radius: 16px; 
+    backdrop-filter: blur(5px);
+  }
+  .stat-label { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; margin-bottom: 5px; }
+  .stat-value { font-size: 1.8rem; font-weight: 600; color: #fff; }
+
+  .main-grid { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 30px; }
+  .card { 
+    background: var(--card); 
+    border: 1px solid var(--border); 
+    border-radius: 24px; 
+    padding: 24px; 
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+    height: 550px;
+  }
+  .card h2 { font-size: 1.1rem; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; opacity: 0.9; }
+  
+  /* Log Box */
+  .log-container { 
+    flex: 1; 
+    overflow-y: auto; 
+    background: rgba(0,0,0,0.2); 
+    border-radius: 16px; 
+    padding: 15px; 
+    font-family: 'Consolas', monospace; 
+    font-size: 0.85rem;
+    border: 1px solid rgba(255,255,255,0.03);
+  }
+  .log-line { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.02); animation: fadeIn 0.3s ease; }
+  .log-time { color: var(--text-dim); margin-right: 12px; }
+  .log-level { font-weight: 600; margin-right: 10px; width: 60px; display: inline-block; }
+  .INFO .log-level { color: var(--accent); }
+  .WARNING .log-level { color: #ffb74d; }
+  .ERROR .log-level { color: var(--danger); }
+  
+  /* Rules */
+  .rules-list { flex: 1; overflow-y: auto; padding-right: 5px; }
+  .rule-item { 
+    background: rgba(255,255,255,0.02); 
+    border: 1px solid var(--border); 
+    border-radius: 12px; 
+    padding: 15px; 
+    margin-bottom: 15px;
+    transition: 0.2s;
+  }
+  .rule-item:hover { background: rgba(255,255,255,0.04); border-color: var(--accent); }
+  .rule-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .rule-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: rgba(79, 195, 247, 0.1); color: var(--accent); padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; border: 1px solid rgba(79, 195, 247, 0.2); }
+  .rule-dest { font-size: 0.8rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  .actions { display: flex; align-items: center; gap: 10px; }
+  .btn-icon { background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 5px; transition: 0.2s; }
+  .btn-icon:hover { color: #fff; }
+  .btn-icon.delete:hover { color: var(--danger); }
+  
+  .badge-hits { font-size: 0.7rem; background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; color: var(--text-dim); }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+  .empty-state { text-align: center; padding: 40px; color: var(--text-dim); font-size: 0.9rem; }
+  .refresh-btn { 
+    margin-top: auto; 
+    background: var(--accent); 
+    color: #000; 
+    border: none; 
+    padding: 12px; 
+    border-radius: 12px; 
+    font-weight: 600; 
+    cursor: pointer; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 10px;
+    transition: 0.2s;
+  }
+  .refresh-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 15px var(--accent-glow); }
 </style>
 </head>
 <body>
-<h1><span id="status"></span> Download Organizer &nbsp;<span style="color:#555;font-size:0.8em">dashboard</span></h1>
-<div class="grid">
 
-  <div class="card">
-    <h2>📋 Log attività <span class="badge" id="log-count">0</span></h2>
-    <div class="log-box" id="log-box"></div>
-  </div>
+<div class="container">
+  <header>
+    <div class="logo">
+      <i data-lucide="folder-search"></i>
+      Download Organizer
+    </div>
+    <div class="status-pill">
+      <div id="ai-dot" class="status-dot"></div>
+      Ollama: <span id="ai-status">Checking...</span>
+    </div>
+  </header>
 
-  <div class="card">
-    <h2>🧠 Regole apprese <span class="badge" id="rule-count">0</span></h2>
-    <div id="rules-box"><div class="empty">Nessuna regola ancora.</div></div>
-    <div style="margin-top:12px">
-      <button onclick="loadRules()" style="background:#1e3a4a;border:none;color:#4fc3f7;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:0.8em">↻ Aggiorna</button>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Files Organizzati</div>
+      <div class="stat-value" id="stat-count">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Modello AI</div>
+      <div class="stat-value" style="font-size:1.1rem" id="stat-model">---</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Memoria</div>
+      <div class="stat-value" style="font-size:1.1rem"><span id="stat-rules">0</span> Regole</div>
     </div>
   </div>
 
+  <div class="main-grid">
+    <div class="card">
+      <h2><i data-lucide="terminal" size="18"></i> Log Attività</h2>
+      <div class="log-container" id="log-box"></div>
+    </div>
+
+    <div class="card">
+      <h2><i data-lucide="brain" size="18"></i> Regole Apprese</h2>
+      <div class="rules-list" id="rules-box">
+        <div class="empty-state">Nessuna regola salvata.</div>
+      </div>
+      <button class="refresh-btn" onclick="loadRules()">
+        <i data-lucide="rotate-cw" size="18"></i> Aggiorna Regole
+      </button>
+    </div>
+  </div>
 </div>
 
 <script>
-let logCount = 0;
+  lucide.createIcons();
+  let logCount = 0;
 
-// SSE — log in tempo reale
-const evtSource = new EventSource("/stream");
+  // SSE Configuration
+  const setupSSE = () => {
+    const evtSource = new EventSource("/stream");
+    
+    evtSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        addLog(data);
+        if (data.msg.includes("✓") || data.msg.includes("→")) {
+          updateStats();
+        }
+        if (data.msg.includes("Memoria:")) {
+          loadRules();
+        }
+      } catch (err) { console.error("Parse error", err); }
+    };
 
-evtSource.onmessage = function(e) {
-  const data = JSON.parse(e.data);
-  const box = document.getElementById("log-box");
-  const line = document.createElement("div");
-  line.className = "log-line " + data.level;
-  line.innerHTML = '<span class="t">' + data.time + '</span><span class="msg">' + escHtml(data.msg) + '</span>';
-  box.appendChild(line);
-  box.scrollTop = box.scrollHeight;
-  logCount++;
-  document.getElementById("log-count").textContent = logCount;
-  
-  // Se il log indica un cambiamento di memoria, aggiorna subito le regole
-  if (data.msg.includes("Memoria:")) loadRules();
-};
+    evtSource.onerror = () => {
+      console.warn("SSE Disconnected. Retrying...");
+      evtSource.close();
+      setTimeout(setupSSE, 3000);
+    };
+  };
 
-evtSource.onerror = function(e) {
-  console.error("SSE Error:", e);
-  document.getElementById("status").style.background = "#ef5350"; // Rosso se errore
-};
+  const addLog = (data) => {
+    const box = document.getElementById("log-box");
+    const line = document.createElement("div");
+    line.className = `log-line ${data.level}`;
+    line.innerHTML = `<span class="log-time">${data.time}</span><span class="log-level">${data.level}</span><span class="log-msg">${escHtml(data.msg)}</span>`;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+    
+    // Limit logs in DOM
+    if (box.children.length > 200) box.removeChild(box.firstChild);
+  };
 
-evtSource.onopen = function() {
-  document.getElementById("status").style.background = "#4caf50"; // Verde se ok
-};
+  const escHtml = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
-// Poll delle regole ogni 10 secondi per sicurezza
-setInterval(loadRules, 10000);
+  const loadRules = () => {
+    fetch("/api/rules").then(r => r.json()).then(rules => {
+      const box = document.getElementById("rules-box");
+      document.getElementById("stat-rules").textContent = rules.length;
+      
+      if (rules.length === 0) {
+        box.innerHTML = '<div class="empty-state">Nessuna regola ancora disponibile. Sposta i file da "Unsorted" per insegnare all\\'organizer!</div>';
+        return;
+      }
 
-function escHtml(s) {
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-}
-
-// Carica regole
-function loadRules() {
-  fetch("/api/rules").then(r => r.json()).then(rules => {
-    const box = document.getElementById("rules-box");
-    document.getElementById("rule-count").textContent = rules.length;
-    if (rules.length === 0) {
-      box.innerHTML = '<div class="empty">Nessuna regola ancora.</div>';
-      return;
-    }
-    box.innerHTML = rules.map((r, i) => `
-      <div class="rule" id="rule-${i}">
-        <button class="toggle ${r.enabled !== false ? 'on' : ''}" onclick="toggleRule(${i})" title="Abilita/Disabilita"></button>
-        <div style="flex:1;min-width:0">
-          <div class="keywords" id="kw-${i}" onclick="editKw(${i})" title="Clicca per modificare">${r.keywords.join(', ')}</div>
-          <div class="dest" title="${r.dest}">${r.dest.split('\\\\').pop() || r.dest.split('/').pop()}</div>
+      box.innerHTML = rules.map((r, i) => `
+        <div class="rule-item">
+          <div class="rule-header">
+            <div class="rule-tags">
+              ${r.keywords.map(k => `<span class="tag">${k}</span>`).join('')}
+            </div>
+            <div class="actions">
+              <span class="badge-hits">${r.hits} hit</span>
+              <button class="btn-icon delete" onclick="deleteRule(${i})"><i data-lucide="trash-2" size="14"></i></button>
+            </div>
+          </div>
+          <div class="rule-dest">${r.dest.split(/[\\\\/]/).pop()}</div>
         </div>
-        <div class="hits">${r.hits} hit</div>
-        <button class="btn-del" onclick="deleteRule(${i})" title="Elimina">✕</button>
-      </div>
-    `).join('');
-  });
-}
+      `).join('');
+      lucide.createIcons();
+    });
+  };
 
-function toggleRule(i) {
-  fetch("/api/rules/" + i + "/toggle", {method:"POST"})
-    .then(r => r.json()).then(() => loadRules());
-}
+  const deleteRule = (i) => {
+    if (!confirm("Eliminare questa regola?")) return;
+    fetch(`/api/rules/${i}`, {method:"DELETE"}).then(() => loadRules());
+  };
 
-function deleteRule(i) {
-  if (!confirm("Eliminare questa regola?")) return;
-  fetch("/api/rules/" + i, {method:"DELETE"})
-    .then(r => r.json()).then(() => loadRules());
-}
+  const updateStats = () => {
+    fetch("/api/stats").then(r => r.json()).then(data => {
+      document.getElementById("stat-count").textContent = data.moved_count;
+      document.getElementById("stat-model").textContent = data.model;
+      
+      const dot = document.getElementById("ai-dot");
+      const status = document.getElementById("ai-status");
+      if (data.ollama_online) {
+        dot.className = "status-dot online";
+        status.textContent = "Online";
+      } else {
+        dot.className = "status-dot offline";
+        status.textContent = "Offline";
+      }
+    });
+  };
 
-function editKw(i) {
-  const el = document.getElementById("kw-" + i);
-  const current = el.textContent;
-  el.innerHTML = '<input class="edit-input" id="edit-'+i+'" value="'+current+'" onblur="saveKw('+i+')" onkeydown="if(event.key===\'Enter\')saveKw('+i+')">';
-  document.getElementById("edit-"+i).focus();
-}
-
-function saveKw(i) {
-  const val = document.getElementById("edit-"+i)?.value;
-  if (!val) return;
-  fetch("/api/rules/" + i + "/keywords", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({keywords: val.split(',').map(k => k.trim()).filter(Boolean)})
-  }).then(r => r.json()).then(() => loadRules());
-}
-
-loadRules();
+  setupSSE();
+  loadRules();
+  updateStats();
+  setInterval(updateStats, 5000);
 </script>
 </body>
 </html>"""
@@ -770,33 +929,31 @@ loadRules();
                     except queue.Empty:
                         yield ": ping\n\n"  # keepalive
             finally:
-                listeners.remove(q)
+                if q in listeners:
+                    listeners.remove(q)
         return Response(event_stream(), mimetype="text/event-stream")
 
     @app.route("/api/rules")
     def get_rules():
         return jsonify(org.memoria.rules)
 
+    @app.route("/api/stats")
+    def get_stats():
+        online = False
+        try:
+            ollama_client.list()
+            online = True
+        except: pass
+        return jsonify({
+            "moved_count": getattr(org, 'moved_count', 0),
+            "model": org.cfg.get("ollama_model", OLLAMA_MODEL),
+            "ollama_online": online
+        })
+
     @app.route("/api/rules/<int:i>", methods=["DELETE"])
     def delete_rule(i):
         if 0 <= i < len(org.memoria.rules):
             org.memoria.rules.pop(i)
-            org.memoria._save()
-        return jsonify({"ok": True})
-
-    @app.route("/api/rules/<int:i>/toggle", methods=["POST"])
-    def toggle_rule(i):
-        if 0 <= i < len(org.memoria.rules):
-            r = org.memoria.rules[i]
-            r["enabled"] = not r.get("enabled", True)
-            org.memoria._save()
-        return jsonify({"ok": True})
-
-    @app.route("/api/rules/<int:i>/keywords", methods=["POST"])
-    def update_keywords(i):
-        if 0 <= i < len(org.memoria.rules):
-            data = request.get_json()
-            org.memoria.rules[i]["keywords"] = data.get("keywords", [])
             org.memoria._save()
         return jsonify({"ok": True})
 
