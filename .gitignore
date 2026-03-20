@@ -17,4 +17,7 @@ Thumbs.db
 desktop.ini
 
 # App Config (avoid sharing local paths)
-config/config.json
+config/config.json
+
+#TODO
+TODO

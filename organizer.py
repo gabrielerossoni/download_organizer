@@ -45,20 +45,26 @@ OLLAMA_MODEL = "llama3.1:8b"
 
 
 def print_banner(logger: logging.Logger):
+    # SESSION_START marker for dashboard filtering
+    logger.info("═══ SESSION_START ═══")
     banner = r"""
-    ___               _                 _ 
-   |   \  ___ __ __ _ | | ___  __ _  __| |
-   | |  |/ _ \\ V  V /| |/ _ \/ _` |/ _` |
-   |___/ \___/ \_/\_/ |_|\___/\__,_|\__,_|
-    ___                             _               
-   / _ \  _ _  __ _  __ _  _ _ (_) ___ ___  _ _ 
-  | (_) || '_|/ _` |/ _` || ' \| ||_ // -_)| '_|
-   \___/ |_|  \__, |\__,_||_||_|_|/__|\___||_|  
-              |___/                             
+ ██████╗ ██████╗ ██╗    ██╗███╗   ██╗██╗      ██████╗  █████╗ ██████╗ 
+ ██╔══██╗██╔═══██╗██║    ██║████╗  ██║██║     ██╔═══██╗██╔══██╗██╔══██╗
+ ██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║██║     ██║   ██║███████║██║  ██║
+ ██║  ██║██║   ██║██║███╗██║██║╚██╗██║██║     ██║   ██║██╔══██║██║  ██║
+ ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║███████╗╚██████╔╝██║  ██║██████╔╝
+ ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ 
+                                                                      
+  ██████╗ ██████╗  ██████╗  █████╗ ███╗   ██╗██╗███████╗███████╗██████╗ 
+ ██╔═══██╗██╔══██╗██╔════╝ ██╔══██╗████╗  ██║██║╚══███╔╝██╔════╝██╔══██╗
+ ██║   ██║██████╔╝██║  ███╗███████║██╔██╗ ██║██║  ███╔╝ █████╗  ██████╔╝
+ ██║   ██║██╔══██╗██║   ██║██╔══██║██║╚██╗██║██║ ███╔╝  ██╔══╝  ██╔══██╗
+ ╚██████╔╝██║  ██║╚██████╔╝██║  ██║██║ ╚████║██║███████╗███████╗██║  ██║
+  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚══════╝╚══════╝╚═╝  ╚═╝
     """
     logger.info(banner)
     logger.info("⚡ Version 4.0 Pro | English Localization Active")
-    logger.info("─" * 50)
+    logger.info("─" * 70)
 
 # ─────────────────────────────────────────────
 # CONFIG
@@ -962,9 +968,17 @@ def create_dashboard(org: Organizer, logger: logging.Logger):
             return jsonify([])
         try:
             with open(log_path, "r", encoding="utf-8-sig") as f:
-                lines = f.readlines()[-100:]
+                all_lines = f.readlines()
+                # Find the LAST SESSION_START
+                start_idx = 0
+                for i in range(len(all_lines) - 1, -1, -1):
+                    if "SESSION_START" in all_lines[i]:
+                        start_idx = i
+                        break
+                
+                session_lines = all_lines[start_idx:]
                 parsed = []
-                for line in lines:
+                for line in session_lines:
                     if " [" in line and "] " in line:
                         parts = line.split(" [", 1)
                         time_lvl = parts[1].split("] ", 1)
