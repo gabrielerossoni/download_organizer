@@ -37,9 +37,9 @@ except ImportError:
     print("Installa le dipendenze: pip install -r requirements.txt")
     sys.exit(1)
 
-CONFIG_PATH  = Path(__file__).parent / "config.json"
+CONFIG_PATH  = Path(__file__).parent / "config" / "config.json"
 listeners = []  # connessioni SSE attive
-MEMORIA_PATH = Path(__file__).parent / "memoria.json"
+MEMORIA_PATH = Path(__file__).parent / "memory" / "memoria.json"
 LOG_QUEUE = queue.Queue(maxsize=500)  # coda eventi per SSE
 OLLAMA_MODEL = "llama3.1:8b"
 
@@ -653,6 +653,7 @@ evtSource.onmessage = function(e) {
   box.scrollTop = box.scrollHeight;
   logCount++;
   document.getElementById("log-count").textContent = logCount;
+  if (data.msg.includes("Memoria:")) loadRules(); setInterval(loadRules, 10000);
 };
 
 function escHtml(s) {

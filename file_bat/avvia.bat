@@ -13,7 +13,8 @@ if %errorlevel% neq 0 (
 )
 
 echo  [1/3] Installazione dipendenze...
-pip install -r "%~dp0requirements.txt" --quiet 2>nul
+set ROOT=%~dp0..
+pip install -r "%ROOT%\requirements.txt" --quiet 2>nul
 tasklist /fi "imagename eq ollama.exe" 2>nul | find /i "ollama.exe" >nul
 if %errorlevel% neq 0 (
     echo  [2/3] Avvio Ollama...
@@ -29,4 +30,4 @@ echo  [3/3] Avvio organizer...
 taskkill /f /fi "WINDOWTITLE eq download_organizer*" >nul 2>&1
 wmic process where "commandline like '%%organizer.py%%'" delete >nul 2>&1
 
-start "" /b pythonw -W ignore "%~dp0organizer.py"
+start "" /b pythonw -W ignore "%ROOT%\organizer.py"
