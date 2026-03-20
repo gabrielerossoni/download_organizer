@@ -107,6 +107,15 @@ Want to run it manually?
 
 Feel free to open an issue or a pull request! If you like this project, **don't forget to give it a ⭐ on GitHub!**
 
+### 💰 Support the Project
+
+If this tool saved you time, consider supporting its development:
+
+[![PayPal](https://img.shields.io/badge/Donate-PayPal-00457C?style=flat&logo=paypal)](https://paypal.me/GabrieleRossoni0)
+[![Linktree](https://img.shields.io/badge/Links-Linktree-43E660?style=flat&logo=linktree)](https://linktr.ee/gabriele.rossoni_)
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
