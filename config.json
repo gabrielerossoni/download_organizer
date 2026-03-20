@@ -4,7 +4,7 @@
   "ollama_model": "llama3.1:8b",
   "ollama_url": "http://localhost:11434/api/chat",
   "hotkey": "ctrl+shift+o",
-  "wait_seconds": 6,
+  "wait_seconds": 57,
   "min_size_bytes": 100,
   "log_file": "organizer.log",
   "dry_run": false,
