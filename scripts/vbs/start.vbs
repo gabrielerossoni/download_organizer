@@ -3,7 +3,7 @@ On Error Resume Next
 Dim WshShell, fso, ScriptDir
 Set WshShell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
-ScriptDir = fso.GetParentFolderName(fso.GetParentFolderName(WScript.ScriptFullName))
+ScriptDir = fso.GetParentFolderName(fso.GetParentFolderName(fso.GetParentFolderName(WScript.ScriptFullName)))
 WshShell.CurrentDirectory = ScriptDir
 
 ' [0/2] Installazione dipendenze
