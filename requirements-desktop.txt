@@ -1,0 +1,7 @@
+# Optional legacy resident dashboard/tray mode.
+watchdog>=4.0.0
+keyboard>=0.13.5
+winotify>=1.1.0
+pystray>=0.19.0
+Pillow>=10.0.0
+flask>=3.0.0

@@ -10,6 +10,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
+.organizer.lock
+.stop-request
+models/
+memory/scan-state.sqlite3*
+memory/classification/
 .env
 
 # Windows
@@ -18,6 +24,7 @@ desktop.ini
 
 # App Config (avoid sharing local paths)
 config/config.json
+config/*.local-backup.json
 
 #TODO
 TODO

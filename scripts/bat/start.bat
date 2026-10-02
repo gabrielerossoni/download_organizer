@@ -1,33 +1,10 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
-
-echo  === Download Organizer ===
-echo.
-
-python --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo  [ERRORE] Python non trovato.
+cd /d "%~dp0..\.."
+if not exist ".venv\Scripts\python.exe" (
+    echo Esegui prima Setup.bat.
     pause
     exit /b 1
 )
-
-echo  [1/3] Installazione dipendenze...
-set ROOT=%~dp0..\..
-pip install -r "%ROOT%\requirements.txt" --quiet 2>nul
-tasklist /fi "imagename eq ollama.exe" 2>nul | find /i "ollama.exe" >nul
-if %errorlevel% neq 0 (
-    echo  [2/3] Avvio Ollama...
-    start "" /b ollama serve
-    timeout /t 5 /nobreak >nul
-) else (
-    echo  [2/3] Ollama gia attivo.
-)
-
-timeout /t 5 /nobreak >nul
-echo  [3/3] Avvio organizer...
-
-taskkill /f /fi "WINDOWTITLE eq download_organizer*" >nul 2>&1
-wmic process where "commandline like '%%organizer.py%%'" delete >nul 2>&1
-
-start "" /b pythonw -W ignore "%ROOT%\organizer.py"
+".venv\Scripts\python.exe" organizer.py
+if errorlevel 1 pause

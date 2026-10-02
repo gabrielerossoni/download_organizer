@@ -1,0 +1,2 @@
+# Optional PDF text extraction. DOCX uses the standard library.
+pymupdf>=1.24.0
